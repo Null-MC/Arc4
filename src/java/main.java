@@ -9,6 +9,8 @@ import dev.irisshaders.aperture.api.objects.*;
 import dev.irisshaders.aperture.api.pipeline.*;
 import dev.irisshaders.aperture.api.renderer.*;
 import lib.HillaireSky;
+import lib.PingPongBuffer;
+import lib.PingPongBufferBuilder;
 import lib.Accumulation;
 import lib.Flipper;
 
@@ -18,14 +20,18 @@ public class main implements ShaderPack {
 
     public final HillaireSky sky = new HillaireSky();
 
-    private Accumulation accumulation;
+    private Screen screen;
     private Flipper<Texture2D> mainFlipper;
     private MappedBuffer<SceneBuffer> bufferScene;
+    private Accumulation accumulation;
+    private PingPongBuffer history;
     // private Froxels froxels;
 
 
     @Override
 	public void configurePipeline(Screen screen, PipelineConfig pipeline) {
+        this.screen = screen;
+
         sky.Initialize(pipeline);
 
         if (pipeline.settings().getBoolValue("Accumulation"))
@@ -51,6 +57,21 @@ public class main implements ShaderPack {
 
         mainFlipper = new Flipper<Texture2D>(mainTexture_A, mainTexture_B);
 
+        if (pipeline.settings().getBoolValue("TAA_Enabled")) {
+            // var texHistory_A = pipeline.texture2D("texHistory_A", TextureFormat.RGBA16_SFLOAT)
+            //     .windowSize()
+            //     .create();
+
+            // var texHistory_B = pipeline.texture2D("texHistory_B", TextureFormat.RGBA16_SFLOAT)
+            //     .windowSize()
+            //     .create();
+
+            // historyFlipper = new Flipper<Texture2D>(texHistory_A, texHistory_B);
+            history = new PingPongBufferBuilder(pipeline, "texHistory", TextureFormat.RGBA16_SFLOAT)
+                .windowSize()
+                .createEmpty();
+        }
+
         var texOpaqueColor = pipeline.texture2D("texOpaqueColor", TextureFormat.RGBA8_UNORM)
             .renderSize()
             .create();
@@ -59,7 +80,7 @@ public class main implements ShaderPack {
             .renderSize()
             .create();
 
-        bufferScene = pipeline.mappedBuffer("planet", SceneBuffer.class);
+        bufferScene = pipeline.mappedBuffer("scene", SceneBuffer.class);
 
         var bufferPlanet = pipeline.mappedBuffer("planet", PlanetBuffer.class);
         bufferPlanet.write(PlanetBuffer.Earth);
@@ -111,10 +132,15 @@ public class main implements ShaderPack {
 
             mainFlipper.flip();
 
-            if (accumulation != null) {
-                accumulation.render(stage, screen)
+            if (pipeline.settings().getBoolValue("TAA_Enabled")) {
+                stage.compute("TAA", "post/taa", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
-                    .overrideObject("texMain_write", mainFlipper.getWriter().name());
+                    .overrideObject("texMain_write", mainFlipper.getWriter().name())
+                    // .overrideObject("texHistory_read", history.getReader().name())
+                    // .overrideObject("texHistory_write", historyFlipper.getWriter().name())
+                    // .overrideObject("texHistory_read", "texHistory_A")
+                    // .overrideObject("texHistory_write", "texHistory_A")
+                    .dispatch2D(sizeX_16, sizeY_16);
 
                 mainFlipper.flip();
             }
@@ -126,14 +152,22 @@ public class main implements ShaderPack {
 
             mainFlipper.flip();
 
-            // if (accumulation != null) {
-            //     stage.compute("Sharpen", "post/sharpen", "main")
-            //         .overrideObject("texMain_read", mainFlipper.getReader().name())
-            //         .overrideObject("texMain_write", mainFlipper.getWriter().name())
-            //         .dispatch2D(sizeX_16, sizeY_16);
+            if (accumulation != null) {
+                accumulation.render(stage, screen)
+                    .overrideObject("texMain_read", mainFlipper.getReader().name())
+                    .overrideObject("texMain_write", mainFlipper.getWriter().name());
 
-            //     mainFlipper.flip();
-            // }
+                mainFlipper.flip();
+            }
+
+            if (pipeline.settings().getBoolValue("TAA_Enabled")) {
+                stage.compute("Sharpen", "post/sharpen", "main")
+                    .overrideObject("texMain_read", mainFlipper.getReader().name())
+                    .overrideObject("texMain_write", mainFlipper.getWriter().name())
+                    .dispatch2D(sizeX_16, sizeY_16);
+
+                mainFlipper.flip();
+            }
         });
 
         pipeline.combinationPass("post/final")
@@ -151,15 +185,15 @@ public class main implements ShaderPack {
 
     @Override
 	public void onNewFrame(FrameState state) {
-        if (accumulation != null) accumulation.update();
+        bufferScene.write(SceneBuffer.Build(state, screen));
+        
+        if (accumulation != null) accumulation.flip();
+        if (history != null) history.flip();
 
         var rendererConfig = state.getRendererConfig();
         var settings = rendererConfig.getSettings();
 
         rendererConfig.setSunPathRotation(settings.getFloatValue("SunAngle"));
-
-        var TAA_jitter = ?;
-        bufferScene.write(new SceneBuffer(TAA_jitter));
     }
 
     private void withStage(PipelineConfig pipeline, ProgramStage programStage, Consumer<StageList> callback) {

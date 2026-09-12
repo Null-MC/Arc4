@@ -1,5 +1,6 @@
 import aperture;
 import settings;
+import lib.scene;
 import object_shader;
 import lib.octohedral;
 
@@ -26,6 +27,10 @@ struct DeferShader : Shader<VertexData, FragmentData> {
 
         float4 viewPos = mul(transforms.view, input.pos());
         clipPos = mul(transforms.projection, viewPos);
+
+        if (userSettings.TAA_Enabled) {
+            clipPos.xy += scene.TAA_jitter * (2.0 * clipPos.w);
+        }
     }
 
     static FragmentData shadeSurface(PixelData objectData, VertexData input) {

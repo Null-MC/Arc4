@@ -12,6 +12,15 @@ RWTexture2D<half3> texAccumulate_write;
 
 Texture2D<half3> texAccumulate_read;
 
+float3 reproject(float3 clipPos) {
+    float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
+    float3 localPos = mul3(ap.camera.viewInv, viewPos);
+
+    float3 localPosLast = localPos + (ap.camera.position - ap.temporal.position);
+    float3 viewPosLast = mul3(ap.temporal.view, localPosLast);
+    return mul_project(ap.temporal.projection, viewPosLast);
+}
+
 
 [[shader("compute")]]
 [numthreads(16,16)]
@@ -25,12 +34,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float depth = ap.opaqueDepth[globalPos];
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
-    float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
-    float3 localPos = mul3(ap.camera.viewInv, viewPos);
-
-    float3 localPosLast = localPos + (ap.camera.position - ap.temporal.position);
-    float3 viewPosLast = mul3(ap.temporal.view, localPosLast);
-    float3 clipPosLast = mul_project(ap.temporal.projection, viewPosLast);
+    float3 clipPosLast = reproject(clipPos);
     float2 texcoordLast = clipPosLast.xy * 0.5 + 0.5;
     
     // sample previous frame

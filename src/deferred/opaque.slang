@@ -1,4 +1,6 @@
 import aperture;
+import settings;
+import lib.scene;
 import lib.common;
 import lib.ign;
 import lib.dda;
@@ -46,6 +48,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     half3 color;
 
     float2 texcoord = (globalPos + 0.5) / ap.game.screenSize;
+
+    if (userSettings.TAA_Enabled) {
+        texcoord -= scene.TAA_jitter;
+    }
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);

@@ -1,8 +1,9 @@
-option.Accumulation=Accumulation
 option.SunAngle=Sun Angle
 suffix.SunAngle=°
 option.SeaLevel=Sea Level
 suffix.SeaLevel=m
+option.TAA_Enabled=TAA
+option.Accumulation=Accumulation
 
 screen.Shadows=Shadows
 option.Shadow_Resolution=Resolution

@@ -16,7 +16,7 @@ public class Accumulation {
             .createEmpty();
     }
 
-    public void update() {
+    public void flip() {
         textureSet.flip();
     }
 
