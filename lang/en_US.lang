@@ -1,0 +1,15 @@
+option.Accumulation=Accumulation
+option.SunAngle=Sun Angle
+suffix.SunAngle=°
+option.SeaLevel=Sea Level
+suffix.SeaLevel=m
+
+screen.Shadows=Shadows
+option.Shadow_Resolution=Resolution
+suffix.Shadow_Resolution=x
+
+screen.Sky=Sky
+option.Sky_BarometricPressure=Barometric Pressure
+option.Sky_FogIntensity=Fog Intensity
+option.Sky_Humidity=Humidity
+option.Sky_Turbidity=Turbidity
