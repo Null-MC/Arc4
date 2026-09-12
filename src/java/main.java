@@ -1,6 +1,7 @@
 import java.util.function.Consumer;
 
 import buffers.PlanetBuffer;
+import buffers.SceneBuffer;
 import buffers.SkyBuffer;
 import dev.irisshaders.aperture.api.*;
 import dev.irisshaders.aperture.api.commands.StageList;
@@ -19,7 +20,7 @@ public class main implements ShaderPack {
 
     private Accumulation accumulation;
     private Flipper<Texture2D> mainFlipper;
-    // private MappedBuffer<PlanetBuffer> bufferPlanet;
+    private MappedBuffer<SceneBuffer> bufferScene;
     // private Froxels froxels;
 
 
@@ -58,11 +59,13 @@ public class main implements ShaderPack {
             .renderSize()
             .create();
 
+        bufferScene = pipeline.mappedBuffer("planet", SceneBuffer.class);
+
         var bufferPlanet = pipeline.mappedBuffer("planet", PlanetBuffer.class);
-        bufferPlanet.write(PlanetBuffer.Build());
+        bufferPlanet.write(PlanetBuffer.Earth);
 
         var bufferSky = pipeline.mappedBuffer("sky", SkyBuffer.class);
-        bufferSky.write(SkyBuffer.Build());
+        bufferSky.write(SkyBuffer.Earth);
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);
@@ -154,6 +157,9 @@ public class main implements ShaderPack {
         var settings = rendererConfig.getSettings();
 
         rendererConfig.setSunPathRotation(settings.getFloatValue("SunAngle"));
+
+        var TAA_jitter = ?;
+        bufferScene.write(new SceneBuffer(TAA_jitter));
     }
 
     private void withStage(PipelineConfig pipeline, ProgramStage programStage, Consumer<StageList> callback) {
