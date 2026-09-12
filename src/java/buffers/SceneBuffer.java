@@ -30,11 +30,6 @@ public record SceneBuffer(
 			(float)fract(inv_X * i + 0.5),
 			(float)fract(inv_Y * i + 0.5)
 		);
-
-		// return new Vector2f(
-		// 	(float) frac(1.3247179572 * i + 0.5),
-		// 	(float) frac(1.7548776662 * i + 0.5)
-		// );
 	}
 
     private static double fract(double f) {

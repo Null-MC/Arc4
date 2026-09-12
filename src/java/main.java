@@ -58,15 +58,6 @@ public class main implements ShaderPack {
         mainFlipper = new Flipper<Texture2D>(mainTexture_A, mainTexture_B);
 
         if (pipeline.settings().getBoolValue("TAA_Enabled")) {
-            // var texHistory_A = pipeline.texture2D("texHistory_A", TextureFormat.RGBA16_SFLOAT)
-            //     .windowSize()
-            //     .create();
-
-            // var texHistory_B = pipeline.texture2D("texHistory_B", TextureFormat.RGBA16_SFLOAT)
-            //     .windowSize()
-            //     .create();
-
-            // historyFlipper = new Flipper<Texture2D>(texHistory_A, texHistory_B);
             history = new PingPongBufferBuilder(pipeline, "texHistory", TextureFormat.RGBA16_SFLOAT)
                 .windowSize()
                 .createEmpty();
@@ -136,10 +127,6 @@ public class main implements ShaderPack {
                 stage.compute("TAA", "post/taa", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
                     .overrideObject("texMain_write", mainFlipper.getWriter().name())
-                    // .overrideObject("texHistory_read", history.getReader().name())
-                    // .overrideObject("texHistory_write", historyFlipper.getWriter().name())
-                    // .overrideObject("texHistory_read", "texHistory_A")
-                    // .overrideObject("texHistory_write", "texHistory_A")
                     .dispatch2D(sizeX_16, sizeY_16);
 
                 mainFlipper.flip();
