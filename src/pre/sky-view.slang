@@ -16,9 +16,7 @@ static const int numScatteringSteps = 64;
 RWTexture2D<half3> texSkyView;
 
 
-half3 raymarchScattering(uint2 globalPos, PlanetAtmosphere planet, float3 pos, float3 rayDir, float3 sunDir, float tMax) {
-    var sky = HillaireSky::currentSky();
-
+half3 raymarchScattering(uint2 globalPos, float3 pos, float3 rayDir, float3 sunDir, float tMax) {
     float cosTheta = dot(rayDir, sunDir);
     
 	float miePhaseValue_sun = getMiePhase(cosTheta);
@@ -38,15 +36,15 @@ half3 raymarchScattering(uint2 globalPos, PlanetAtmosphere planet, float3 pos, f
         float3 newPos = pos + t*rayDir;
         
         AtmosphereSample skySample;
-        float altitude_KM = planet.getSkyAltitude(newPos);
-        sky.Sample(altitude_KM, skySample);
+        float altitude_KM = HillaireSky::planet.getSkyAltitude(newPos);
+        HillaireSky::sky.Sample(altitude_KM, skySample);
 
         float3 sampleTransmittance = exp(-stepSize * skySample.extinction);
 
-        float3 sunTransmittanceLux = HillaireSky::sampleTransmit(planet, newPos, sunDir) * SunColor;
-        float3 moonTransmittanceLux = HillaireSky::sampleTransmit(planet, newPos, -sunDir) * MoonColor;
+        float3 sunTransmittanceLux = HillaireSky::planet.sampleTransmit(newPos, sunDir) * SunColor;
+        float3 moonTransmittanceLux = HillaireSky::planet.sampleTransmit(newPos, -sunDir) * MoonColor;
 
-        float3 psiMS = HillaireSky::sampleMultiScatter(planet, newPos, sunDir) + Sky_MinLight;
+        float3 psiMS = HillaireSky::planet.sampleMultiScatter(newPos, sunDir) + Sky_MinLight;
         //vec3 psiMS_moon = getValFromMultiScattLUT(texSkyMultiScatter, newPos, sunDir);
 
         float3 rayleighInScattering_sun = rayleighPhaseValue_sun * sunTransmittanceLux;
@@ -76,21 +74,19 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (any(globalPos >= uint2(BufferWidth, BufferHeight))) return;
     float2 texcoord = (globalPos.xy + 0.5) / float2(BufferWidth, BufferHeight);
 
-    var planet = HillaireSky::currentPlanet();
-
-    float3 skyPos = planet.getSkyPosition(0.0);
+    float3 skyPos = HillaireSky::planet.getSkyPosition(0.0);
 
     float3 rayDir, sunDir;
-    HillaireSky::fromViewCoord(texcoord, planet, skyPos, rayDir, sunDir);
+    HillaireSky::fromViewCoord(texcoord, HillaireSky::planet, skyPos, rayDir, sunDir);
     
-    float tMax = planet.rayIntersectsAtmosphere(skyPos, rayDir);
+    float tMax = HillaireSky::planet.rayIntersectsAtmosphere(skyPos, rayDir);
 
     if (planetSurfaceEnabled) {
-        float groundDist = planet.rayIntersectsGround(skyPos, rayDir);
+        float groundDist = HillaireSky::planet.rayIntersectsGround(skyPos, rayDir);
         if (groundDist > 0.0) tMax = groundDist;
     }
 
-    half3 color_new = raymarchScattering(globalPos, planet, skyPos, rayDir, sunDir, tMax);
+    half3 color_new = raymarchScattering(globalPos, skyPos, rayDir, sunDir, tMax);
 
     half3 color = texSkyView[globalPos];
     color = ap.timing.frameCounter < 1 ? color_new : lerp(color, color_new, 0.0625h);

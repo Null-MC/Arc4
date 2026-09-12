@@ -1,5 +1,6 @@
 package lib;
 
+import dev.irisshaders.aperture.api.commands.ComputeCommand;
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.Screen;
 import dev.irisshaders.aperture.api.objects.TextureFormat;
@@ -19,11 +20,11 @@ public class Accumulation {
         textureSet.flip();
     }
 
-    public void render(StageList stage, Screen screen) {
+    public ComputeCommand render(StageList stage, Screen screen) {
         var sizeX = (int)Math.ceil(screen.renderWidth() / 16f);
         var sizeY = (int)Math.ceil(screen.renderHeight() / 16f);
         
-        stage.compute("Accumulate", "post/accumulate", "main")
+        return stage.compute("Accumulate", "post/accumulate", "main")
             .dispatch2D(sizeX, sizeY);
     }
 }

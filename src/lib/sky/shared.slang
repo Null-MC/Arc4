@@ -7,26 +7,8 @@ import lib.common;
 
 namespace HillaireSky {
 
-    public PlanetAtmosphere currentPlanet() {
-        return planetEarth;
-    }
-
-    public SkyParameters currentSky() {
-        return skyEarth;
-    }
-
-    static const PlanetAtmosphere planetEarth = {
-        3360.0,
-        3460.0,
-    };
-
-    static const SkyParameters skyEarth = {
-        float3(5.80e-3, 13.55e-3, 33.10e-3),
-        2.00e-3,
-        4.40e-4,
-        8.0,
-        1.2,
-    };
+    ConstantBuffer<PlanetAtmosphere, ScalarDataLayout> planet;
+    ConstantBuffer<SkyParameters, ScalarDataLayout> sky;
 
 }
 

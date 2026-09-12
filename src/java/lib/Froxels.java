@@ -10,7 +10,7 @@ import dev.irisshaders.aperture.api.objects.TextureReference;
 import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
 
 public class Froxels {
-    private final BufferFlipper<Texture3D> flipper;
+    private final Flipper<Texture3D> flipper;
     private final TextureReference reader;
     private final TextureReference writer;
 
@@ -32,7 +32,7 @@ public class Froxels {
             .size(BufferWidth, BufferHeight, BufferDepth)
             .create();
 
-        flipper = new BufferFlipper<Texture3D>(texFroxel_A, texFroxel_B);
+        flipper = new Flipper<Texture3D>(texFroxel_A, texFroxel_B);
 
         reader = pipeline.reference("texFroxel_read", TextureFormat.RGBA16_SFLOAT)
             // .size(BufferWidth, BufferHeight, BufferDepth)

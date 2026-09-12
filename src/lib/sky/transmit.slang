@@ -43,3 +43,9 @@ namespace HillaireSky {
     }
 
 }
+
+extension PlanetAtmosphere {
+    half3 sampleTransmit(const in float3 skyPos, const in float3 sunDir) {
+        return HillaireSky::sampleTransmit(this, skyPos, sunDir);
+    }
+}

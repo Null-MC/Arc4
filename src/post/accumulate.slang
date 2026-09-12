@@ -3,9 +3,9 @@ import lib.common;
 
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> mainTexture_write;
+RWTexture2D<half3> texMain_write;
 
-Texture2D<half3> mainTexture_read;
+Texture2D<half3> texMain_read;
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<half3> texAccumulate_write;
@@ -18,7 +18,7 @@ Texture2D<half3> texAccumulate_read;
 void main(uint2 globalPos : SV_DispatchThreadID) {
     if (any(globalPos >= ap.game.screenSize)) return;
 
-    half3 color_now = mainTexture_read[globalPos];
+    half3 color_now = texMain_read[globalPos];
 
     // reproject
     float2 texcoord = (globalPos + 0.5) / ap.game.screenSize;
@@ -38,6 +38,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     half3 color_last = texAccumulate_read.Sample(apt_linearSampler, texcoordLast);
     color_now = ap.timing.frameCounter < 1 ? color_now : lerp(color_last, color_now, blendF);
 
-    mainTexture_write[globalPos] = color_now;
+    texMain_write[globalPos] = color_now;
     texAccumulate_write[globalPos] = color_now;
 }

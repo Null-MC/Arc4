@@ -29,9 +29,6 @@ struct ComputeInput {
 void updateFroxels(ComputeInput input) {
 	if (any(input.globalPos >= Froxel_Resolution)) return;
 
-    var planet = HillaireSky::currentPlanet();
-    var sky = HillaireSky::currentSky();
-
     float3 seed = input.globalPos + float3(3,9,13)*ap.timing.frameCounter;
     float3 bufferPos = input.globalPos + hash33(seed);
 
@@ -45,7 +42,7 @@ void updateFroxels(ComputeInput input) {
     float3 sunDir = normalize(ap.celestial.sunPosition);
     float3 moonDir = normalize(ap.celestial.moonPosition);
 
-    float3 skyPos = planet.getSkyPosition(localPos);
+    float3 skyPos = HillaireSky::planet.getSkyPosition(localPos);
 
     float3 shadowViewPos = mul3(ap.celestial.view, localPos);
 
@@ -60,10 +57,10 @@ void updateFroxels(ComputeInput input) {
     float VoL_moon = dot(localDir, moonDir);
     float miePhase_moon = getMiePhase(VoL_moon);
 
-    float3 indirect = HillaireSky::sampleMultiScatter(planet, skyPos, sunDir);
+    float3 indirect = HillaireSky::planet.sampleMultiScatter(skyPos, sunDir);
 
     float3 skyLightDir = normalize(ap.celestial.position);
-    float atmoDist = planet.rayIntersectsAtmosphere(skyPos, skyLightDir);
+    float atmoDist = HillaireSky::planet.rayIntersectsAtmosphere(skyPos, skyLightDir);
     // TODO: use min of ground dist?
     float stepDist = atmoDist / Froxel_SkyLight_StepCount;
 
@@ -74,8 +71,8 @@ void updateFroxels(ComputeInput input) {
         float3 traceSkyPos = skyPos + i * stepDist * skyLightDir;
 
         AtmosphereSample skySample;
-        float altitude_KM = planet.getSkyAltitude(traceSkyPos);
-        sky.Sample(altitude_KM, skySample);
+        float altitude_KM = HillaireSky::planet.getSkyAltitude(traceSkyPos);
+        HillaireSky::sky.Sample(altitude_KM, skySample);
 
         float3 sampleTransmittance = exp(-stepDist * skySample.extinction);
 
@@ -84,8 +81,8 @@ void updateFroxels(ComputeInput input) {
         // float3 scatteringF = (scatteringNoPhase - scatteringNoPhase * sampleTransmittance) / skySample.extinction;
         // lumFactor += transmittance * scatteringF;
 
-        float3 sunLight = HillaireSky::sampleTransmit(planet, traceSkyPos, sunDir) * SunColor;
-        float3 moonLight = HillaireSky::sampleTransmit(planet, traceSkyPos, -sunDir) * MoonColor;
+        float3 sunLight = HillaireSky::planet.sampleTransmit(traceSkyPos, sunDir) * SunColor;
+        float3 moonLight = HillaireSky::planet.sampleTransmit(traceSkyPos, -sunDir) * MoonColor;
 
         float3 inScattering = skySample.mieScattering * (miePhase_sun * sunLight + miePhase_moon * moonLight) + Sky_MinLight;
 

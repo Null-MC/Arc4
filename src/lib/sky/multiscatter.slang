@@ -40,3 +40,9 @@ namespace HillaireSky {
     }
 
 }
+
+extension PlanetAtmosphere {
+    half3 sampleMultiScatter(const in float3 skyPos, const in float3 sunDir) {
+        return HillaireSky::sampleMultiScatter(this, skyPos, sunDir);
+    }
+}

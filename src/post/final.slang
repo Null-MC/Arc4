@@ -6,13 +6,13 @@ import lib.sky.multiscatter;
 import lib.sky.view;
 
 
-Texture2D<half3> mainTexture_read;
+Texture2D<half3> tex_read;
 
 
 [[shader("pixel")]]
 float3 main(float2 texcoord: SV_Position) {
     uint2 uv = uint2(texcoord);
-    half3 color = mainTexture_read[uv];
+    half3 color = tex_read[uv];
 
     // float2 texcoord;
     // if (debugWindow(uv, int2(8, 8), int2(256, 64), texcoord)) {

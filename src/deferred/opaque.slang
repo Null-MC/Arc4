@@ -13,7 +13,7 @@ import lib.sky.moon;
 
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> mainTexture_write;
+RWTexture2D<half3> tex_write;
 
 Texture2D<half3> texOpaqueColor;
 Texture2D<half2> texOpaqueNormal;
@@ -53,14 +53,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 sunDir = normalize(ap.celestial.sunPosition);
 
-    var planet = HillaireSky::currentPlanet();
-
     if (depth > 0.0) {
         color = texOpaqueColor[globalPos];
         float3 normal = octohedral::decode(texOpaqueNormal[globalPos]);
 
-        float3 skyPos = planet.getSkyPosition(localPos);
-        float3 skyLight = HillaireSky::sampleTransmit(planet, skyPos, sunDir);
+        float3 skyPos = HillaireSky::planet.getSkyPosition(localPos);
+        float3 skyLight = HillaireSky::planet.sampleTransmit(skyPos, sunDir);
         skyLight *= SunColor * max(dot(normal, sunDir), 0.0);
 
         float3 shadowViewPos = mul3(ap.celestial.view, localPos);
@@ -77,7 +75,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         float traceDist = DDA::trace(localPos + 0.02 * normal, rayDir, 32);
         if (traceDist < 0.0)
-            skyLight += PI*HillaireSky::sampleView(planet, skyPos, rayDir, sunDir);
+            skyLight += PI*HillaireSky::sampleView(HillaireSky::planet, skyPos, rayDir, sunDir);
 
         half3 albedo = pow(color, half3(2.2));
         color = half3(albedo/PI * skyLight);
@@ -85,24 +83,22 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         // color = (rayDir * 0.5 + 0.5) * 100.0;
     }
     else {
+        float3 skyPos = HillaireSky::planet.getSkyPosition(0.0);
         float3 localViewDir = normalize(localPos);
+        color = 0.0h;
 
-        float3 skyPos = planet.getSkyPosition(0.0);
-
-        color = 0.0;//HillaireSky::sampleView(planet, skyPos, localViewDir, sunDir);
-
-        if (planet.rayIntersectsGround(skyPos, localViewDir) <= 0.0) {
-            float3 sunLight = renderSunWithBloom(localViewDir, sunDir) * SunColor;
-            half3 sunTransmit = HillaireSky::sampleTransmit(planet, skyPos, sunDir);
-            color += half3(sunLight * 20.0) * sunTransmit;
-
+        if (HillaireSky::planet.rayIntersectsGround(skyPos, localViewDir) <= 0.0) {
             float3 moonDir = normalize(ap.celestial.moonPosition);
 
+            float3 sunLight = renderSunWithBloom(localViewDir, sunDir) * SunColor;
+            half3 sunTransmit = HillaireSky::planet.sampleTransmit(skyPos, sunDir);
+            color += half3(sunLight * 20.0) * sunTransmit;
+
             float3 moonLight = renderMoonWithBloom(localViewDir, moonDir) * MoonColor;
-            half3 moonTransmit = HillaireSky::sampleTransmit(planet, skyPos, moonDir);
+            half3 moonTransmit = HillaireSky::planet.sampleTransmit(skyPos, moonDir);
             color += half3(moonLight * 20.0) * moonTransmit;
         }
     }
 
-    mainTexture_write[globalPos] = color;
+    tex_write[globalPos] = color;
 }

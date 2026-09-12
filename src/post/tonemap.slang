@@ -1,20 +1,20 @@
 import aperture;
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> mainTexture_write;
+RWTexture2D<half3> tex_write;
 
-Texture2D<half3> mainTexture_read;
+Texture2D<half3> tex_read;
 
 
 [[shader("compute")]]
 [numthreads(16,16)]
 void main(uint2 globalPos : SV_DispatchThreadID) {
-    half3 color = mainTexture_read[globalPos];
+    half3 color = tex_read[globalPos];
 
     color *= 0.004h; // exposure
     color = half3(aces_fit_tonemap(color));
 
-    mainTexture_write[globalPos] = color;
+    tex_write[globalPos] = color;
 }
 
 float3 aces_fit_tonemap(const in float3 x) {

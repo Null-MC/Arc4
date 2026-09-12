@@ -1,14 +1,15 @@
 import java.util.function.Consumer;
 
+import buffers.PlanetBuffer;
+import buffers.SkyBuffer;
 import dev.irisshaders.aperture.api.*;
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.*;
 import dev.irisshaders.aperture.api.pipeline.*;
 import dev.irisshaders.aperture.api.renderer.*;
 import lib.HillaireSky;
-import lib.PingPongBuffer;
-import lib.PingPongBufferBuilder;
 import lib.Accumulation;
+import lib.Flipper;
 
 
 public class main implements ShaderPack {
@@ -17,7 +18,8 @@ public class main implements ShaderPack {
     public final HillaireSky sky = new HillaireSky();
 
     private Accumulation accumulation;
-    private PingPongBuffer mainTexture;
+    private Flipper<Texture2D> mainFlipper;
+    // private MappedBuffer<PlanetBuffer> bufferPlanet;
     // private Froxels froxels;
 
 
@@ -38,9 +40,15 @@ public class main implements ShaderPack {
             .magFilter(FilterMode.NEAREST)
             .create();
 
-        mainTexture = new PingPongBufferBuilder(pipeline, "mainTexture", TextureFormat.RGBA16_SFLOAT)
+        var mainTexture_A = pipeline.texture2D("mainTexture_A", TextureFormat.RGBA16_SFLOAT)
             .windowSize()
-            .createEmpty();
+            .create();
+
+        var mainTexture_B = pipeline.texture2D("mainTexture_B", TextureFormat.RGBA16_SFLOAT)
+            .windowSize()
+            .create();
+
+        mainFlipper = new Flipper<Texture2D>(mainTexture_A, mainTexture_B);
 
         var texOpaqueColor = pipeline.texture2D("texOpaqueColor", TextureFormat.RGBA8_UNORM)
             .renderSize()
@@ -49,6 +57,12 @@ public class main implements ShaderPack {
         var texOpaqueNormal = pipeline.texture2D("texOpaqueNormal", TextureFormat.RG16_SFLOAT)
             .renderSize()
             .create();
+
+        var bufferPlanet = pipeline.mappedBuffer("planet", PlanetBuffer.class);
+        bufferPlanet.write(PlanetBuffer.Build());
+
+        var bufferSky = pipeline.mappedBuffer("sky", SkyBuffer.class);
+        bufferSky.write(SkyBuffer.Build());
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);
@@ -66,6 +80,10 @@ public class main implements ShaderPack {
             .writes("color", texOpaqueColor)
             .writes("normal", texOpaqueNormal);
 
+        pipeline.object(ProgramUsage.TRANSLUCENT, "object/deferred", "DeferShader")
+            .writes("color", texOpaqueColor)
+            .writes("normal", texOpaqueNormal);
+
         // pipeline.object(ProgramUsage.TRANSLUCENT, "object/basic", "BasicShader")
         //     .writes("color", mainTexture)
         //     .exportInt("CASCADE_COUNT", CASCADE_COUNT);
@@ -75,37 +93,48 @@ public class main implements ShaderPack {
             var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
             
             stage.compute("OpaqueDeferred", "deferred/opaque", "main")
+                .overrideObject("tex_read", mainFlipper.getReader().name())
+                .overrideObject("tex_write", mainFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
             
             // froxels.render(stage);
 
-            mainTexture.flip();
+            mainFlipper.flip();
 
             stage.compute("Volumetric", "deferred/volumetric", "main")
+                .overrideObject("tex_read", mainFlipper.getReader().name())
+                .overrideObject("tex_write", mainFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
 
-            mainTexture.flip();
+            mainFlipper.flip();
 
             if (accumulation != null) {
-                accumulation.render(stage, screen);
+                accumulation.render(stage, screen)
+                    .overrideObject("texMain_read", mainFlipper.getReader().name())
+                    .overrideObject("texMain_write", mainFlipper.getWriter().name());
 
-                mainTexture.flip();
+                mainFlipper.flip();
             }
 
             stage.compute("Tonemap", "post/tonemap", "main")
+                .overrideObject("tex_read", mainFlipper.getReader().name())
+                .overrideObject("tex_write", mainFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
 
-            mainTexture.flip();
+            mainFlipper.flip();
 
-            if (accumulation != null) {
-                stage.compute("Sharpen", "post/sharpen", "main")
-                    .dispatch2D(sizeX_16, sizeY_16);
+            // if (accumulation != null) {
+            //     stage.compute("Sharpen", "post/sharpen", "main")
+            //         .overrideObject("texMain_read", mainFlipper.getReader().name())
+            //         .overrideObject("texMain_write", mainFlipper.getWriter().name())
+            //         .dispatch2D(sizeX_16, sizeY_16);
 
-                mainTexture.flip();
-            }
+            //     mainFlipper.flip();
+            // }
         });
 
-        pipeline.combinationPass("post/final");
+        pipeline.combinationPass("post/final")
+            .overrideObject("tex_read", mainFlipper.getReader().name());
     }
 
     @Override

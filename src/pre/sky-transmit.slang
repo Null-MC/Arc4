@@ -20,15 +20,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float2 uv = (globalPos.xy + 0.5) / float2(BufferWidth, BufferHeight);
     if (!all(globalPos < uint2(BufferWidth, BufferHeight))) return;
 
-    var planet = HillaireSky::currentPlanet();
-    var sky = HillaireSky::currentSky();
-
     float3 pos, sunDir;
-    HillaireSky::fromTransmitCoord(uv, planet, pos, sunDir);
+    HillaireSky::fromTransmitCoord(uv, HillaireSky::planet, pos, sunDir);
 
     float3 transmittance = 0.0;
-    if (planet.rayIntersectsGround(pos, sunDir) <= 0.0) {
-        float atmoDist = planet.rayIntersectsAtmosphere(pos, sunDir);
+    if (HillaireSky::planet.rayIntersectsGround(pos, sunDir) <= 0.0) {
+        float atmoDist = HillaireSky::planet.rayIntersectsAtmosphere(pos, sunDir);
         
         float dither = InterleavedGradientNoiseTime(globalPos);
         float stepSize = atmoDist / sunTransmittanceSteps;
@@ -40,8 +37,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 newPos = pos + t*sunDir;
             
             AtmosphereSample sample;
-            float altitude_KM = planet.getSkyAltitude(newPos);
-            sky.Sample(altitude_KM, sample);
+            float altitude_KM = HillaireSky::planet.getSkyAltitude(newPos);
+            HillaireSky::sky.Sample(altitude_KM, sample);
             
             accumDepth += sample.extinction;
         }

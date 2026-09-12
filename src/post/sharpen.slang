@@ -5,9 +5,9 @@ static const uint groupResX = 16;
 static const uint groupResY = 16;
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> mainTexture_write;
+RWTexture2D<half3> texMain_write;
 
-Texture2D<half3> mainTexture_read;
+Texture2D<half3> texMain_read;
 
 extern static const float TAA_CasStrength = 0.5;
 static const uint sharedBufferResX = groupResX+2;
@@ -48,7 +48,7 @@ void main(ComputeInput input) {
 
             if (i_shared < sharedBufferSize) {
                 int2 uv_i = getSharedUV(i_shared);
-                half3 color = mainTexture_read[uv_base + uv_i].rgb;
+                half3 color = texMain_read[uv_base + uv_i].rgb;
                 sharedBuffer[i_shared] = color;
             }
         }
@@ -78,6 +78,6 @@ void main(ComputeInput input) {
         float3 weight_inv = rcp(1.0 + 4.0*w);
         half3 color = half3(((b + d + f + h) * w + e) * weight_inv);
 
-        mainTexture_write[input.globalPos] = saturate(color);
+        texMain_write[input.globalPos] = saturate(color);
     }
 }
