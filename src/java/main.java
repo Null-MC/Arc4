@@ -11,7 +11,7 @@ import dev.irisshaders.aperture.api.renderer.*;
 import lib.HillaireSky;
 import lib.PingPongBuffer;
 import lib.PingPongBufferBuilder;
-import lib.Accumulation;
+// import lib.Accumulation;
 import lib.Flipper;
 
 
@@ -22,9 +22,11 @@ public class main implements ShaderPack {
 
     private Screen screen;
     private Flipper<Texture2D> mainFlipper;
+    private Flipper<Texture2D> diffuseFlipper;
     private MappedBuffer<SceneBuffer> bufferScene;
-    private Accumulation accumulation;
-    private PingPongBuffer history;
+    // private Accumulation diffuseAccumulation;
+    private PingPongBuffer diffuseHistory;
+    private PingPongBuffer taaHistory;
     // private Froxels froxels;
 
 
@@ -34,8 +36,8 @@ public class main implements ShaderPack {
 
         sky.Initialize(pipeline);
 
-        if (pipeline.settings().getBoolValue("Accumulation"))
-            accumulation = new Accumulation(pipeline);
+        // if (pipeline.settings().getBoolValue("Accumulation"))
+        //     accumulation = new Accumulation(pipeline);
 
         // froxels = new Froxels(pipeline, screen);
 
@@ -47,22 +49,6 @@ public class main implements ShaderPack {
             .magFilter(FilterMode.NEAREST)
             .create();
 
-        var mainTexture_A = pipeline.texture2D("mainTexture_A", TextureFormat.RGBA16_SFLOAT)
-            .windowSize()
-            .create();
-
-        var mainTexture_B = pipeline.texture2D("mainTexture_B", TextureFormat.RGBA16_SFLOAT)
-            .windowSize()
-            .create();
-
-        mainFlipper = new Flipper<Texture2D>(mainTexture_A, mainTexture_B);
-
-        if (pipeline.settings().getBoolValue("TAA_Enabled")) {
-            history = new PingPongBufferBuilder(pipeline, "texHistory", TextureFormat.RGBA16_SFLOAT)
-                .windowSize()
-                .createEmpty();
-        }
-
         var texOpaqueColor = pipeline.texture2D("texOpaqueColor", TextureFormat.RGBA8_UNORM)
             .renderSize()
             .create();
@@ -70,6 +56,34 @@ public class main implements ShaderPack {
         var texOpaqueNormal = pipeline.texture2D("texOpaqueNormal", TextureFormat.RG16_SFLOAT)
             .renderSize()
             .create();
+
+        diffuseFlipper = new Flipper<Texture2D>(
+            pipeline.texture2D("texDiffuse_A", TextureFormat.RGBA16_SFLOAT)
+                .renderSize()
+                .create(),
+            pipeline.texture2D("texDiffuse_B", TextureFormat.RGBA16_SFLOAT)
+                .renderSize()
+                .create());
+
+        if (pipeline.settings().getBoolValue("Accumulation")) {
+            diffuseHistory = new PingPongBufferBuilder(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
+                .renderSize()
+                .createEmpty();
+        }
+
+        mainFlipper = new Flipper<Texture2D>(
+            pipeline.texture2D("mainTexture_A", TextureFormat.RGBA16_SFLOAT)
+                .windowSize()
+                .create(),
+            pipeline.texture2D("mainTexture_B", TextureFormat.RGBA16_SFLOAT)
+                .windowSize()
+                .create());
+
+        if (pipeline.settings().getBoolValue("TAA_Enabled")) {
+            taaHistory = new PingPongBufferBuilder(pipeline, "texTaaHistory", TextureFormat.RGBA16_SFLOAT)
+                .windowSize()
+                .createEmpty();
+        }
 
         bufferScene = pipeline.mappedBuffer("scene", SceneBuffer.class);
 
@@ -107,7 +121,25 @@ public class main implements ShaderPack {
             var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
             var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
             
+            stage.compute("Deferred-Diffuse", "deferred/diffuse", "main")
+                .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
+                .dispatch2D(sizeX_16, sizeY_16);
+
+            diffuseFlipper.flip();
+                
+            // TODO: blur
+
+            if (pipeline.settings().getBoolValue("Accumulation")) {
+                stage.compute("Accumulate-Diffuse", "post/accumulate", "main")
+                    .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
+                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
+                    .dispatch2D(sizeX_16, sizeY_16);
+
+                diffuseFlipper.flip();
+            }
+
             stage.compute("OpaqueDeferred", "deferred/opaque", "main")
+                .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
                 .overrideObject("tex_read", mainFlipper.getReader().name())
                 .overrideObject("tex_write", mainFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
@@ -139,14 +171,6 @@ public class main implements ShaderPack {
 
             mainFlipper.flip();
 
-            if (accumulation != null) {
-                accumulation.render(stage, screen)
-                    .overrideObject("texMain_read", mainFlipper.getReader().name())
-                    .overrideObject("texMain_write", mainFlipper.getWriter().name());
-
-                mainFlipper.flip();
-            }
-
             if (pipeline.settings().getBoolValue("TAA_Enabled")) {
                 stage.compute("Sharpen", "post/sharpen", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
@@ -174,8 +198,8 @@ public class main implements ShaderPack {
 	public void onNewFrame(FrameState state) {
         bufferScene.write(SceneBuffer.Build(state, screen));
         
-        if (accumulation != null) accumulation.flip();
-        if (history != null) history.flip();
+        if (diffuseHistory != null) diffuseHistory.flip();
+        if (taaHistory != null) taaHistory.flip();
 
         var rendererConfig = state.getRendererConfig();
         var settings = rendererConfig.getSettings();

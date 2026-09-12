@@ -3,14 +3,14 @@ import lib.common;
 
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> texMain_write;
+RWTexture2D<half3> texDiffuse_write;
 
-Texture2D<half3> texMain_read;
+Texture2D<half3> texDiffuse_read;
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> texAccumulate_write;
+RWTexture2D<half3> texDiffuseHistory_write;
 
-Texture2D<half3> texAccumulate_read;
+Texture2D<half3> texDiffuseHistory_read;
 
 float3 reproject(float3 clipPos) {
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
@@ -27,7 +27,7 @@ float3 reproject(float3 clipPos) {
 void main(uint2 globalPos : SV_DispatchThreadID) {
     if (any(globalPos >= ap.game.screenSize)) return;
 
-    half3 color_now = texMain_read[globalPos];
+    half3 color_now = texDiffuse_read[globalPos];
 
     // reproject
     float2 texcoord = (globalPos + 0.5) / ap.game.screenSize;
@@ -39,9 +39,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     
     // sample previous frame
     half blendF = all(saturate(texcoordLast) == texcoordLast) ? 0.0125h : 1.0h;
-    half3 color_last = texAccumulate_read.Sample(apt_linearSampler, texcoordLast);
+    half3 color_last = texDiffuseHistory_read.Sample(apt_linearSampler, texcoordLast);
     color_now = ap.timing.frameCounter < 1 ? color_now : lerp(color_last, color_now, blendF);
 
-    texMain_write[globalPos] = color_now;
-    texAccumulate_write[globalPos] = color_now;
+    texDiffuse_write[globalPos] = color_now;
+    texDiffuseHistory_write[globalPos] = color_now;
 }

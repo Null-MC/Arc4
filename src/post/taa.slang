@@ -17,9 +17,9 @@ RWTexture2D<half3> texMain_write;
 Texture2D<half3> texMain_read;
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half4> texHistory_write;
+RWTexture2D<half4> texTaaHistory_write;
 
-Texture2D<half4> texHistory_read;
+Texture2D<half4> texTaaHistory_read;
 
 
 uint2 getSharedUV(const in uint z) {
@@ -89,7 +89,7 @@ void main(ComputeInput input) {
         float3 clipPosLast = reproject(clipPos);
         float2 uv_prev = clipPosLast.xy * 0.5 + 0.5;
 
-        half4 lastColor = texHistory_read.Sample(apt_linearSampler, uv_prev);
+        half4 lastColor = texTaaHistory_read.Sample(apt_linearSampler, uv_prev);
 
         half mixRate = half(TAA_MaxAccumFrames);//clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
         if (!all(saturate(uv_prev) == uv_prev)) mixRate = 0.0h;
@@ -111,6 +111,6 @@ void main(ComputeInput input) {
         colorFinal = clamp(colorFinal, color_min, color_max);
         
         texMain_write[input.globalPos.xy] = colorFinal;
-        texHistory_write[input.globalPos.xy] = half4(colorFinal, (half)(mixRate + 1.0));
+        texTaaHistory_write[input.globalPos.xy] = half4(colorFinal, (half)(mixRate + 1.0));
     }
 }
