@@ -11,7 +11,7 @@ import lib.ign;
 extern static const int BufferWidth;
 extern static const int BufferHeight;
 static const float mulScattSteps = 20.0;
-static const int sampleCount = 8;
+static const int sampleCount = 16;
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<half3> texSkyMultiScatter;
@@ -35,17 +35,17 @@ float3 sampleCosineWeightedHemisphere(const in float2 u) {
 [[shader("compute")]]
 [numthreads(16,16)]
 void main(uint2 globalPos : SV_DispatchThreadID) {
-    float2 uv = (globalPos.xy + 0.5) / float2(BufferWidth, BufferHeight);
     if (!all(globalPos < uint2(BufferWidth, BufferHeight))) return;
 
     float3 pos, sunDir;
+    float2 uv = (globalPos.xy + 0.5) / float2(BufferWidth, BufferHeight);
     HillaireSky::fromMultiScatterCoord(uv, HillaireSky::planet, pos, sunDir);
     
     float3 lumTotal = 0.0;
     float3 fms = 0.0;
 
     for (int i = 0; i < sampleCount; i++) {
-        float time = ap.timing.frameCounter * sampleCount + i;
+        float time = ap.timing.frameCounter + sampleCount * i;
         float dither = InterleavedGradientNoiseTime(globalPos, time);
 
         float2 rayNoise = getAnimatedBlueNoise(globalPos, i, ap.timing.frameCounter);
@@ -128,6 +128,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     half3 color_new = half3(lumTotal / max(1.0 - fms, 1e-8));
 
     half3 color = texSkyMultiScatter[globalPos];
-    color = ap.timing.frameCounter < 1 ? color_new : lerp(color, color_new, half3(0.0625));
+    color = ap.timing.frameCounter < 1 ? color_new : lerp(color, color_new, half3(0.0125));
     texSkyMultiScatter[globalPos] = color;
 }

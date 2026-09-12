@@ -71,6 +71,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             diffuse.rgb *= half(ap.opaqueShadow.compare(result.position.xy, result.cascade, result.position.z));
         }
 
+        // diffuse.rgb = 0.0h;
+
         // float raySeed = InterleavedGradientNoiseTime(globalPos);
         float2 rayNoise = getAnimatedBlueNoise(globalPos, 0, ap.timing.frameCounter);
         float3 rayDir = sampleCosineWeightedHemisphere(rayNoise);
