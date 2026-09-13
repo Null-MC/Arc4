@@ -1,6 +1,7 @@
 public module sky_transmit;
 
 import aperture;
+import settings;
 import lib.common;
 import lib.sky.shared;
 
@@ -14,37 +15,37 @@ namespace HillaireSky {
         return texSkyTransmit.Sample(skyTransmitSampler, texcoord);
     }
 
-    public half3 sampleTransmit(const in PlanetAtmosphere planet, const in float3 pos, const in float3 sunDir) {
-        return sampleTransmit(toTransmitCoord(planet, pos, sunDir));
+    public half3 sampleTransmit(const in PlanetBuffer planet, const in float3 skyPos, const in float3 sunDir) {
+        return sampleTransmit(toTransmitCoord(planet, skyPos, sunDir));
     }
     
-    public float2 toTransmitCoord(const in PlanetAtmosphere planet, const in float3 pos, const in float3 sunDir) {
-        float world_y = length(pos);
-        float3 up = pos / world_y;
+    public float2 toTransmitCoord(const in PlanetBuffer planet, const in float3 skyPos, const in float3 sunDir) {
+        float world_y = length(skyPos);
+        float3 up = skyPos / world_y;
 
         float2 texcoord;
         texcoord.x = dot(sunDir, up);
-        texcoord.x = pow(abs(texcoord.x), (1.0/3.0)) * sign(texcoord.x);
+        // texcoord.x = pow(abs(texcoord.x), (1.0/3.0)) * sign(texcoord.x);
         texcoord.x = texcoord.x * 0.5 + 0.5;
 
         texcoord.y = planet.getNormalizedHeight(world_y);
         return texcoord;
     }
 
-    public void fromTransmitCoord(const in float2 texcoord, const in PlanetAtmosphere planet, out float3 pos, out float3 sunDir) {
+    public void fromTransmitCoord(const in float2 texcoord, const in PlanetBuffer planet, out float3 skyPos, out float3 sunDir) {
         float sunCosTheta = 2.0*texcoord.x - 1.0;
-        sunCosTheta = pow3(sunCosTheta);// * sign(sunCosTheta);
+        // sunCosTheta = pow3(sunCosTheta);// * sign(sunCosTheta);
 
         float sunTheta = safeacos(sunCosTheta);
         float height_KM = planet.getWorldHeight(texcoord.y);
         
-        pos = float3(0.0, height_KM, 0.0);
+        skyPos = float3(0.0, height_KM, 0.0);
         sunDir = normalize(float3(0.0, sunCosTheta, -sin(sunTheta)));
     }
 
 }
 
-extension PlanetAtmosphere {
+extension PlanetBuffer {
     half3 sampleTransmit(const in float3 skyPos, const in float3 sunDir) {
         return HillaireSky::sampleTransmit(this, skyPos, sunDir);
     }

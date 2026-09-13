@@ -1,4 +1,5 @@
 import aperture;
+import settings;
 import lib.common;
 import lib.ign;
 import lib.sky.shared;
@@ -36,15 +37,15 @@ half3 raymarchScattering(uint2 globalPos, float3 pos, float3 rayDir, float3 sunD
         float3 newPos = pos + t*rayDir;
         
         AtmosphereSample skySample;
-        float altitude_KM = HillaireSky::planet.getSkyAltitude(newPos);
-        HillaireSky::sky.Sample(altitude_KM, skySample);
+        float altitude_KM = planet.getSkyAltitude(newPos);
+        sky.Sample(altitude_KM, skySample);
 
         float3 sampleTransmittance = exp(-stepSize * skySample.extinction);
 
-        float3 sunTransmittanceLux = HillaireSky::planet.sampleTransmit(newPos, sunDir) * SunColor;
-        float3 moonTransmittanceLux = HillaireSky::planet.sampleTransmit(newPos, -sunDir) * MoonColor;
+        float3 sunTransmittanceLux = planet.sampleTransmit(newPos, sunDir) * SunColor;
+        float3 moonTransmittanceLux = planet.sampleTransmit(newPos, -sunDir) * MoonColor;
 
-        float3 psiMS = HillaireSky::planet.sampleMultiScatter(newPos, sunDir) + Sky_MinLight;
+        float3 psiMS = planet.sampleMultiScatter(newPos, sunDir) + Sky_MinLight;
         //vec3 psiMS_moon = getValFromMultiScattLUT(texSkyMultiScatter, newPos, sunDir);
 
         float3 rayleighInScattering_sun = rayleighPhaseValue_sun * sunTransmittanceLux;
@@ -74,15 +75,18 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (any(globalPos >= uint2(BufferWidth, BufferHeight))) return;
     float2 texcoord = (globalPos.xy + 0.5) / float2(BufferWidth, BufferHeight);
 
-    float3 skyPos = HillaireSky::planet.getSkyPosition(0.0);
+    float3 skyPos = planet.getSkyPosition(0.0);
+
+    // ensure view is above planet
+    skyPos.y = max(skyPos.y, planet.RadiusGround_KM);
 
     float3 rayDir, sunDir;
-    HillaireSky::fromViewCoord(texcoord, HillaireSky::planet, skyPos, rayDir, sunDir);
+    HillaireSky::fromViewCoord(texcoord, planet, skyPos, rayDir, sunDir);
     
-    float tMax = HillaireSky::planet.rayIntersectsAtmosphere(skyPos, rayDir);
+    float tMax = planet.rayIntersectsAtmosphere(skyPos, rayDir);
 
     if (planetSurfaceEnabled) {
-        float groundDist = HillaireSky::planet.rayIntersectsGround(skyPos, rayDir);
+        float groundDist = planet.rayIntersectsGround(skyPos, rayDir);
         if (groundDist > 0.0) tMax = groundDist;
     }
 

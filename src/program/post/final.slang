@@ -1,11 +1,10 @@
 import aperture;
+import settings;
 import lib.bayer;
 import lib.sky.transmit;
 import lib.sky.multiscatter;
 import lib.sky.view;
 
-
-extern static const bool debugSky = false;
 
 Texture2D<half3> tex_read;
 
@@ -15,15 +14,15 @@ float3 main(float2 texcoord: SV_Position) {
     uint2 uv = uint2(texcoord);
     half3 color = tex_read[uv];
 
-    if (debugSky) {
+    if (userSettings.Debug_SkyLuts) {
         float2 texcoord;
-        if (debugWindow(uv, int2(8, 8), int2(256, 64), texcoord)) {
+        if (debugWindow(uv, int2(8, 8), int2(512, 128), texcoord)) {
             color = HillaireSky::sampleTransmit(texcoord);
         }
-        if (debugWindow(uv, int2(272, 8), int2(64, 64), texcoord)) {
+        if (debugWindow(uv, int2(8, 144), int2(128, 128), texcoord)) {
             color = HillaireSky::sampleMultiScatter(texcoord) * 0.008h;
         }
-        if (debugWindow(uv, int2(352, 8), int2(64, 64), texcoord)) {
+        if (debugWindow(uv, int2(144, 144), int2(128, 128), texcoord)) {
             color = HillaireSky::sampleView(texcoord) * 0.008h;
         }
     }

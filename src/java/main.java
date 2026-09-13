@@ -11,7 +11,6 @@ import dev.irisshaders.aperture.api.renderer.*;
 import lib.HillaireSky;
 import lib.PingPongBuffer;
 import lib.PingPongBufferBuilder;
-// import lib.Accumulation;
 import lib.Flipper;
 
 
@@ -24,7 +23,6 @@ public class main implements ShaderPack {
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
     private MappedBuffer<SceneBuffer> bufferScene;
-    // private Accumulation diffuseAccumulation;
     private PingPongBuffer diffuseHistory;
     private PingPongBuffer taaHistory;
     // private Froxels froxels;
@@ -35,9 +33,6 @@ public class main implements ShaderPack {
         this.screen = screen;
 
         sky.Initialize(pipeline);
-
-        // if (pipeline.settings().getBoolValue("Accumulation"))
-        //     accumulation = new Accumulation(pipeline);
 
         // froxels = new Froxels(pipeline, screen);
 
@@ -53,7 +48,11 @@ public class main implements ShaderPack {
             .renderSize()
             .create();
 
-        var texOpaqueNormal = pipeline.texture2D("texOpaqueNormal", TextureFormat.RG16_SFLOAT)
+        var texOpaqueNormal = pipeline.texture2D("texOpaqueNormal", TextureFormat.RGBA16_SFLOAT)
+            .renderSize()
+            .create();
+
+        var texOpaqueSpecular = pipeline.texture2D("texOpaqueSpecular", TextureFormat.RGBA8_UNORM)
             .renderSize()
             .create();
 
@@ -99,21 +98,23 @@ public class main implements ShaderPack {
             sky.renderView(stage);
         });
         
-        pipeline.object(ProgramUsage.SHADOW, "object/shadow", "ShadowShader");
+        pipeline.object(ProgramUsage.SHADOW, "program/object/shadow", "ShadowShader");
 
-        pipeline.object(ProgramUsage.SKYBOX, "object/discard", "DiscardShader");
-        pipeline.object(ProgramUsage.SKY_TEXTURES, "object/discard", "DiscardShader");
-        pipeline.object(ProgramUsage.CLOUDS, "object/discard", "DiscardShader");
+        pipeline.object(ProgramUsage.SKYBOX, "program/object/discard", "DiscardShader");
+        pipeline.object(ProgramUsage.SKY_TEXTURES, "program/object/discard", "DiscardShader");
+        pipeline.object(ProgramUsage.CLOUDS, "program/object/discard", "DiscardShader");
 
-        pipeline.object(ProgramUsage.BASIC, "object/deferred", "DeferShader")
+        pipeline.object(ProgramUsage.BASIC, "program/object/deferred", "DeferShader")
             .writes("color", texOpaqueColor)
-            .writes("normal", texOpaqueNormal);
+            .writes("normal", texOpaqueNormal)
+            .writes("specular", texOpaqueSpecular);
 
-        pipeline.object(ProgramUsage.TRANSLUCENT, "object/deferred", "DeferShader")
+        pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/deferred", "DeferShader")
             .writes("color", texOpaqueColor)
-            .writes("normal", texOpaqueNormal);
+            .writes("normal", texOpaqueNormal)
+            .writes("specular", texOpaqueSpecular);
 
-        // pipeline.object(ProgramUsage.TRANSLUCENT, "object/basic", "BasicShader")
+        // pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/basic", "BasicShader")
         //     .writes("color", mainTexture)
         //     .exportInt("CASCADE_COUNT", CASCADE_COUNT);
         
@@ -121,7 +122,7 @@ public class main implements ShaderPack {
             var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
             var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
             
-            stage.compute("Deferred-Diffuse", "deferred/diffuse", "main")
+            stage.compute("Deferred-Diffuse", "program/deferred/diffuse", "main")
                 .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
 
@@ -130,7 +131,7 @@ public class main implements ShaderPack {
             // TODO: blur
 
             if (pipeline.settings().getBoolValue("Accumulation")) {
-                stage.compute("Accumulate-Diffuse", "post/accumulate", "main")
+                stage.compute("Accumulate-Diffuse", "program/post/accumulate", "main")
                     .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
                     .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                     .dispatch2D(sizeX_16, sizeY_16);
@@ -138,7 +139,7 @@ public class main implements ShaderPack {
                 diffuseFlipper.flip();
             }
 
-            stage.compute("OpaqueDeferred", "deferred/opaque", "main")
+            stage.compute("OpaqueDeferred", "program/deferred/opaque", "main")
                 .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
                 .overrideObject("tex_read", mainFlipper.getReader().name())
                 .overrideObject("tex_write", mainFlipper.getWriter().name())
@@ -148,7 +149,7 @@ public class main implements ShaderPack {
 
             mainFlipper.flip();
 
-            stage.compute("Volumetric", "deferred/volumetric", "main")
+            stage.compute("Volumetric", "program/deferred/volumetric", "main")
                 .overrideObject("tex_read", mainFlipper.getReader().name())
                 .overrideObject("tex_write", mainFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
@@ -156,7 +157,7 @@ public class main implements ShaderPack {
             mainFlipper.flip();
 
             if (pipeline.settings().getBoolValue("TAA_Enabled")) {
-                stage.compute("TAA", "post/taa", "main")
+                stage.compute("TAA", "program/post/taa", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
                     .overrideObject("texMain_write", mainFlipper.getWriter().name())
                     .dispatch2D(sizeX_16, sizeY_16);
@@ -164,7 +165,7 @@ public class main implements ShaderPack {
                 mainFlipper.flip();
             }
 
-            stage.compute("Tonemap", "post/tonemap", "main")
+            stage.compute("Tonemap", "program/post/tonemap", "main")
                 .overrideObject("tex_read", mainFlipper.getReader().name())
                 .overrideObject("tex_write", mainFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
@@ -172,7 +173,7 @@ public class main implements ShaderPack {
             mainFlipper.flip();
 
             if (pipeline.settings().getBoolValue("TAA_Enabled")) {
-                stage.compute("Sharpen", "post/sharpen", "main")
+                stage.compute("Sharpen", "program/post/sharpen", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
                     .overrideObject("texMain_write", mainFlipper.getWriter().name())
                     .dispatch2D(sizeX_16, sizeY_16);
@@ -181,7 +182,7 @@ public class main implements ShaderPack {
             }
         });
 
-        pipeline.combinationPass("post/final")
+        pipeline.combinationPass("program/post/final")
             .overrideObject("tex_read", mainFlipper.getReader().name());
     }
 

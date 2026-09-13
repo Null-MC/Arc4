@@ -1,6 +1,7 @@
 public module sky_view;
 
 import aperture;
+import settings;
 import lib.common;
 import lib.sky.shared;
 
@@ -14,11 +15,11 @@ namespace HillaireSky {
         return texSkyView.Sample(skyViewSampler, texcoord);
     }
 
-    public half3 sampleView(const in PlanetAtmosphere planet, const in float3 skyPos, const in float3 rayDir, const in float3 sunDir) {
+    public half3 sampleView(const in PlanetBuffer planet, const in float3 skyPos, const in float3 rayDir, const in float3 sunDir) {
         return sampleView(toViewCoord(planet, skyPos, rayDir, sunDir));
     }
 
-    public float2 toViewCoord(const in PlanetAtmosphere planet, const in float3 skyPos, const in float3 rayDir, const in float3 sunDir) {
+    public float2 toViewCoord(const in PlanetBuffer planet, const in float3 skyPos, const in float3 rayDir, const in float3 sunDir) {
         float height = length(skyPos);
         float3 up = skyPos / height;
 
@@ -44,7 +45,7 @@ namespace HillaireSky {
         return float2(azimuthAngle / (2.0*PI), v);
     }
     
-    void fromViewCoord(const in float2 texcoord, const in PlanetAtmosphere planet, const in float3 skyPos, out float3 rayDir, out float3 sunDir) {
+    void fromViewCoord(const in float2 texcoord, const in PlanetBuffer planet, const in float3 skyPos, out float3 rayDir, out float3 sunDir) {
         float azimuthAngle = (texcoord.x - 0.5) * 2.0*PI;
 
         // Non-linear mapping of altitude. See Section 5.3 of the paper.
@@ -72,4 +73,10 @@ namespace HillaireSky {
         sunDir = float3(0.0, sin(sunAltitude), -cos(sunAltitude));
     }
 
+}
+
+extension PlanetBuffer {
+    half3 sampleView(const in float3 skyPos, const in float3 rayDir, const in float3 sunDir) {
+        return HillaireSky::sampleView(this, skyPos, rayDir, sunDir);
+    }
 }

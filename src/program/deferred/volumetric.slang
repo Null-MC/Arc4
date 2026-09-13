@@ -1,4 +1,5 @@
 import aperture;
+import settings;
 import lib.common;
 import lib.ign;
 import lib.shadows;
@@ -29,8 +30,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float viewDist = length(localPos);
     float3 localViewDir = localPos / viewDist;
 
-    float3 skyPos = HillaireSky::planet.getSkyPosition(0.0);
-    float traceDistance_KM = HillaireSky::planet.rayIntersectsAtmosphere(skyPos, localViewDir);
+    float3 skyPos = planet.getSkyPosition(0.0);
+    float traceDistance_KM = planet.rayIntersectsAtmosphere(skyPos, localViewDir);
+
+    if (planetSurfaceEnabled) {
+        float groundDist = planet.rayIntersectsGround(skyPos, localViewDir);
+        if (groundDist > 0.0) traceDistance_KM = min(traceDistance_KM, groundDist);
+    }
+
     if (depth > 0.0) traceDistance_KM = min(traceDistance_KM, viewDist * 0.001);
     float stepSize_KM = traceDistance_KM / VL_SampleCount;
 
@@ -66,18 +73,18 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         // do not pre-interpolate like shadows, sky is not linear space
         float3 localPos_trace = localViewDir * (traceDistance * stepF);
-        float3 skyPos_trace = HillaireSky::planet.getSkyPosition(localPos_trace);
+        float3 skyPos_trace = planet.getSkyPosition(localPos_trace);
 
         AtmosphereSample skySample;
-        float altitude_KM = HillaireSky::planet.getSkyAltitude(skyPos_trace);
-        HillaireSky::sky.Sample(altitude_KM, skySample);
+        float altitude_KM = planet.getSkyAltitude(skyPos_trace);
+        sky.Sample(altitude_KM, skySample);
 
         float3 sampleTransmittance = exp(-stepSize_KM * skySample.extinction);
 
-        float3 sunTransmittanceLux = HillaireSky::planet.sampleTransmit(skyPos_trace, sunDir) * SunColor * shadowF;
-        float3 moonTransmittanceLux = HillaireSky::planet.sampleTransmit(skyPos_trace, -sunDir) * MoonColor * shadowF;
+        float3 sunTransmittanceLux = planet.sampleTransmit(skyPos_trace, sunDir) * SunColor * shadowF;
+        float3 moonTransmittanceLux = planet.sampleTransmit(skyPos_trace, -sunDir) * MoonColor * shadowF;
 
-        float3 psiMS = HillaireSky::planet.sampleMultiScatter(skyPos_trace, sunDir) + Sky_MinLight;
+        float3 psiMS = planet.sampleMultiScatter(skyPos_trace, sunDir) + Sky_MinLight;
         //vec3 psiMS_moon = getValFromMultiScattLUT(texSkyMultiScatter, newPos, sunDir);
 
         float3 rayleighInScattering_sun = rayleighPhaseValue_sun * sunTransmittanceLux;

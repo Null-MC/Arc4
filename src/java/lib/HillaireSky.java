@@ -58,7 +58,7 @@ public class HillaireSky {
         var sizeX = (int)Math.ceil(TransmitBufferWidth / 16f);
         var sizeY = (int)Math.ceil(TransmitBufferHeight / 16f);
 
-        stage.compute("sky-transmit", "pre/sky-transmit", "main")
+        stage.compute("sky-transmit", "program/pre/sky-transmit", "main")
             .exportInt("BufferWidth", TransmitBufferWidth)
             .exportInt("BufferHeight", TransmitBufferHeight)
             .dispatch2D(sizeX, sizeY);
@@ -68,7 +68,7 @@ public class HillaireSky {
         var sizeX = (int)Math.ceil(MultiScatterBufferWidth / 16f);
         var sizeY = (int)Math.ceil(MultiScatterBufferHeight / 16f);
 
-        stage.compute("sky-multiscatter", "pre/sky-multiscatter", "main")
+        stage.compute("sky-multiscatter", "program/pre/sky-multiscatter", "main")
             .exportInt("BufferWidth", MultiScatterBufferWidth)
             .exportInt("BufferHeight", MultiScatterBufferHeight)
             .dispatch2D(sizeX, sizeY);
@@ -78,7 +78,7 @@ public class HillaireSky {
         var sizeX = (int)Math.ceil(ViewBufferWidth / 16f);
         var sizeY = (int)Math.ceil(ViewBufferHeight / 16f);
 
-        stage.compute("sky-view", "pre/sky-view", "main")
+        stage.compute("sky-view", "program/pre/sky-view", "main")
             .exportInt("BufferWidth", ViewBufferWidth)
             .exportInt("BufferHeight", ViewBufferHeight)
             .dispatch2D(sizeX, sizeY);

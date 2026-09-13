@@ -5,14 +5,6 @@ import settings;
 import lib.common;
 
 
-namespace HillaireSky {
-
-    ConstantBuffer<PlanetAtmosphere, ScalarDataLayout> planet;
-    ConstantBuffer<SkyParameters, ScalarDataLayout> sky;
-
-}
-
-
 static const float3 groundAlbedo = 0.3;
 static const bool planetSurfaceEnabled = true;
 
@@ -22,10 +14,7 @@ static const float3 SunColor = pow(float3(1.0, 0.95, 0.9), 2.2) * 2000.0;
 static const float3 MoonColor = pow(float3(0.5, 0.5, 0.55), 2.2) * 2.2;
 
 
-struct PlanetAtmosphere {
-    float RadiusGround_KM;
-    float RadiusAtmosphere_KM;
-
+extension PlanetBuffer {
     float getNormalizedHeight(const in float worldHeight_KM) {
         return unmix(RadiusGround_KM, RadiusAtmosphere_KM, worldHeight_KM);
     }
@@ -34,12 +23,12 @@ struct PlanetAtmosphere {
         return lerp(RadiusGround_KM, RadiusAtmosphere_KM, normalizedHeight);
     }
 
-    float rayIntersectsGround(const in float3 pos, const in float3 sunDir) {
-        return rayIntersectSphere(pos, sunDir, RadiusGround_KM);
+    float rayIntersectsGround(const in float3 pos, const in float3 rayDir) {
+        return rayIntersectSphere(pos, rayDir, RadiusGround_KM);
     }
 
-    float rayIntersectsAtmosphere(const in float3 pos, const in float3 sunDir) {
-        return rayIntersectSphere(pos, sunDir, RadiusAtmosphere_KM);
+    float rayIntersectsAtmosphere(const in float3 pos, const in float3 rayDir) {
+        return rayIntersectSphere(pos, rayDir, RadiusAtmosphere_KM);
     }
 
     // Returns the altitude in KM above the planet surface.
@@ -57,16 +46,7 @@ struct PlanetAtmosphere {
     }
 };
 
-struct SkyParameters {
-    // Constant base properties at sea level (Earth)
-    float3 BETA_RAYLEIGH_BASE;
-    float  BETA_MIE_BASE_SCA;
-    float  BETA_MIE_BASE_ABS;
-
-    // Default distribution scale heights (in meters)
-    float H_R_DEFAULT;
-    float H_M_DEFAULT;
-
+extension SkyBuffer {
     void Sample(const in float altitude_KM, out AtmosphereSample outSample) {
         // ----------------------------------------------------
         // RAYLEIGH (Air Molecules)

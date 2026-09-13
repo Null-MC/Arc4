@@ -1,4 +1,5 @@
 import aperture;
+import settings;
 import lib.common;
 import lib.ign;
 import lib.sky.shared;
@@ -8,7 +9,8 @@ import lib.sky.transmit;
 extern static const int BufferWidth;
 extern static const int BufferHeight;
 
-static const int sunTransmittanceSteps = 8;
+static const half historyBlendF = rcp(80.0h);
+static const int sunTransmittanceSteps = 16;
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<half3> texSkyTransmit;
@@ -21,11 +23,11 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (!all(globalPos < uint2(BufferWidth, BufferHeight))) return;
 
     float3 pos, sunDir;
-    HillaireSky::fromTransmitCoord(uv, HillaireSky::planet, pos, sunDir);
+    HillaireSky::fromTransmitCoord(uv, planet, pos, sunDir);
 
     float3 transmittance = 0.0;
-    if (HillaireSky::planet.rayIntersectsGround(pos, sunDir) <= 0.0) {
-        float atmoDist = HillaireSky::planet.rayIntersectsAtmosphere(pos, sunDir);
+    if (planet.rayIntersectsGround(pos, sunDir) <= 0.0) {
+        float atmoDist = planet.rayIntersectsAtmosphere(pos, sunDir);
         
         float dither = InterleavedGradientNoiseTime(globalPos);
         float stepSize = atmoDist / sunTransmittanceSteps;
@@ -37,8 +39,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 newPos = pos + t*sunDir;
             
             AtmosphereSample sample;
-            float altitude_KM = HillaireSky::planet.getSkyAltitude(newPos);
-            HillaireSky::sky.Sample(altitude_KM, sample);
+            float altitude_KM = planet.getSkyAltitude(newPos);
+            sky.Sample(altitude_KM, sample);
             
             accumDepth += sample.extinction;
         }
@@ -49,6 +51,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     half3 color_new = half3(saturate(transmittance));
 
     half3 color = texSkyTransmit[globalPos];
-    color = ap.timing.frameCounter < 1 ? color_new : lerp(color, color_new, half3(0.0625));
+    color = ap.timing.frameCounter < 1 ? color_new : lerp(color, color_new, half3(historyBlendF));
     texSkyTransmit[globalPos] = color;
 }

@@ -1,4 +1,5 @@
 import aperture;
+import settings;
 import lib.common;
 import lib.sky.shared;
 import lib.sky.transmit;
@@ -39,7 +40,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 pos, sunDir;
     float2 uv = (globalPos.xy + 0.5) / float2(BufferWidth, BufferHeight);
-    HillaireSky::fromMultiScatterCoord(uv, HillaireSky::planet, pos, sunDir);
+    HillaireSky::fromMultiScatterCoord(uv, planet, pos, sunDir);
     
     float3 lumTotal = 0.0;
     float3 fms = 0.0;
@@ -48,11 +49,11 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float time = ap.timing.frameCounter + sampleCount * i;
         float dither = InterleavedGradientNoiseTime(globalPos, time);
 
-        float2 rayNoise = getAnimatedBlueNoise(globalPos, i, ap.timing.frameCounter);
+        float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, i, ap.timing.frameCounter);
         float3 rayDir = sampleCosineWeightedHemisphere(rayNoise);
 
-        float atmoDist = HillaireSky::planet.rayIntersectsAtmosphere(pos, rayDir);
-        float groundDist = HillaireSky::planet.rayIntersectsGround(pos, rayDir);
+        float atmoDist = planet.rayIntersectsAtmosphere(pos, rayDir);
+        float groundDist = planet.rayIntersectsGround(pos, rayDir);
 
         float tMax = atmoDist;
         if (groundDist > 0.0) {
@@ -78,8 +79,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 newPos = pos + t*rayDir;
 
             AtmosphereSample skySample;
-            float altitude_KM = HillaireSky::planet.getSkyAltitude(newPos);
-            HillaireSky::sky.Sample(altitude_KM, skySample);
+            float altitude_KM = planet.getSkyAltitude(newPos);
+            sky.Sample(altitude_KM, skySample);
 
             float3 sampleTransmittance = exp(-stepSize * skySample.extinction);
 
@@ -88,8 +89,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 scatteringF = scatteringNoPhase * ((1.0 - sampleTransmittance) / max(skySample.extinction, 1e-5));
             lumFactor += transmittance * scatteringF;
 
-            float3 sunTransmittanceLux = HillaireSky::planet.sampleTransmit(newPos, sunDir) * SunColor;
-            float3 moonTransmittanceLux = HillaireSky::planet.sampleTransmit(newPos, -sunDir) * MoonColor;
+            float3 sunTransmittanceLux = planet.sampleTransmit(newPos, sunDir) * SunColor;
+            float3 moonTransmittanceLux = planet.sampleTransmit(newPos, -sunDir) * MoonColor;
 
             float3 rayleighInScattering_sun = skySample.rayleighScattering * rayleighPhase_sun;
             float3 mieInScattering_sun = skySample.mieScattering * miePhase_sun;
@@ -112,8 +113,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 hitPos = pos + groundDist*rayDir;
             
             if (dot(pos, sunDir) > 0.0) {
-                hitPos = normalize(hitPos) * HillaireSky::planet.RadiusGround_KM;
-                lum += transmittance * groundAlbedo * HillaireSky::planet.sampleTransmit(hitPos, sunDir);
+                hitPos = normalize(hitPos) * planet.RadiusGround_KM;
+                lum += transmittance * groundAlbedo * planet.sampleTransmit(hitPos, sunDir);
             }
         }
 

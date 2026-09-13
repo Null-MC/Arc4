@@ -27,6 +27,11 @@ public class settings implements PackSettings {
             screen_sky.option("Sky_PollutionColor_G", OptionType.floatType(0.0f, 1.0f, 0.05f, 0.0f), true);
             screen_sky.option("Sky_PollutionColor_B", OptionType.floatType(0.0f, 1.0f, 0.05f, 0.0f), true);
         });
+
+        subscreen(screen, "Debug", screen_debug -> {
+            screen_debug.option("Debug_WhiteWorld", OptionType.boolType(false), false);
+            screen_debug.option("Debug_SkyLuts", OptionType.boolType(false), false);
+        });
     }
 
     private void subscreen(SettingsScreen parent, String name, Consumer<SettingsScreen> callback) {

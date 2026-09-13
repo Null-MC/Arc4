@@ -1,6 +1,5 @@
 import aperture;
 import settings;
-import lib.scene;
 import lib.common;
 import lib.dda;
 import lib.octohedral;
@@ -14,7 +13,7 @@ import lib.sky.view;
 [[vk::image_format("rgba16f")]]
 RWTexture2D<half4> texDiffuse_write;
 
-Texture2D<half2> texOpaqueNormal;
+Texture2D<half4> texOpaqueNormal;
 
 float3 sampleCosineWeightedHemisphere(const in float2 u) {
     float r = sqrt(u.x);
@@ -30,8 +29,13 @@ float3 transform_to_world(const in float3 normal, const in float3 local_dir) {
     float3 tangent = normalize(cross(up, normal));
     float3 bitangent = cross(normal, tangent);
 
-    float3x3 TBN = float3x3(tangent, bitangent, normal);
-    return mul(local_dir, TBN);
+    // float3x3 TBN = float3x3(tangent, bitangent, normal);
+    // return mul(local_dir, TBN);
+    return normalize(
+        tangent * local_dir.x +
+        bitangent * local_dir.y +
+        normal * local_dir.z
+    );
 }
 
 
@@ -58,11 +62,13 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (depth > 0.0) {
         diffuse.a = 1.0h;
 
-        float3 normal = octohedral::decode(texOpaqueNormal[globalPos]);
+        half4 normalData = texOpaqueNormal[globalPos];
+        float3 geo_normal = octohedral::decode(normalData.xy);
+        float3 tex_normal = octohedral::decode(normalData.zw);
 
-        float3 skyPos = HillaireSky::planet.getSkyPosition(localPos);
-        diffuse.rgb = HillaireSky::planet.sampleTransmit(skyPos, sunDir);
-        diffuse.rgb *= half3(rcp(PI) * SunColor * max(dot(normal, sunDir), 0.0));
+        float3 skyPos = planet.getSkyPosition(localPos);
+        diffuse.rgb = planet.sampleTransmit(skyPos, sunDir);
+        diffuse.rgb *= half3(rcp(PI) * SunColor * max(dot(tex_normal, sunDir), 0.0));
 
         float3 shadowViewPos = mul3(ap.celestial.view, localPos);
         shadowViewPos.z += 0.02;
@@ -73,14 +79,13 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         // diffuse.rgb = 0.0h;
 
-        // float raySeed = InterleavedGradientNoiseTime(globalPos);
-        float2 rayNoise = getAnimatedBlueNoise(globalPos, 0, ap.timing.frameCounter);
+        float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, 0, ap.timing.frameCounter);
         float3 rayDir = sampleCosineWeightedHemisphere(rayNoise);
-        rayDir = transform_to_world(normal, rayDir);
+        rayDir = transform_to_world(tex_normal, rayDir);
 
-        float traceDist = DDA::trace(localPos + 0.02 * normal, rayDir, 32);
+        float traceDist = DDA::trace(localPos + 0.02 * geo_normal, rayDir, 32);
         if (traceDist < 0.0)
-            diffuse.rgb += HillaireSky::sampleView(HillaireSky::planet, skyPos, rayDir, sunDir);
+            diffuse.rgb += planet.sampleView(skyPos, rayDir, sunDir);
     }
 
     texDiffuse_write[globalPos] = diffuse;

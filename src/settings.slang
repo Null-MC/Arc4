@@ -20,7 +20,16 @@ struct PlanetBuffer {
 
 ConstantBuffer<PlanetBuffer, ScalarDataLayout> planet;
 
+struct SceneBuffer {
+    float2 TAA_jitter;
+};
+
+
+ConstantBuffer<SceneBuffer, ScalarDataLayout> scene;
+
 internal extern static const bool value_Accumulation;
+internal extern static const bool value_Debug_SkyLuts;
+internal extern static const bool value_Debug_WhiteWorld;
 internal extern static const int value_Shadow_Resolution;
 internal extern static const bool value_TAA_Enabled;
 
@@ -35,6 +44,8 @@ struct Settings {
     float Sky_Turbidity;
     float SunAngle;
     static const bool Accumulation = value_Accumulation;
+    static const bool Debug_SkyLuts = value_Debug_SkyLuts;
+    static const bool Debug_WhiteWorld = value_Debug_WhiteWorld;
     static const int Shadow_Resolution = value_Shadow_Resolution;
     static const bool TAA_Enabled = value_TAA_Enabled;
 };
