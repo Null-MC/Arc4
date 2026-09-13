@@ -4,6 +4,11 @@ public module common;
 static const float PI = 3.1415926535897932384626433832795;
 
 
+float luminance(const in float3 color) {
+    static const float3 L = float3(0.2126, 0.7152, 0.0722);
+    return dot(color, L);
+}
+
 half3 maxOf(half3 x, half3 y, half3 z) {
     return max(x, max(y, z));
 }

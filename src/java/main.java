@@ -1,16 +1,13 @@
 import java.util.function.Consumer;
 
-import buffers.PlanetBuffer;
-import buffers.SceneBuffer;
-import buffers.SkyBuffer;
 import dev.irisshaders.aperture.api.*;
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.*;
 import dev.irisshaders.aperture.api.pipeline.*;
 import dev.irisshaders.aperture.api.renderer.*;
+
 import lib.HillaireSky;
-import lib.PingPongBuffer;
-import lib.PingPongBufferBuilder;
+import lib.Resources;
 import lib.Flipper;
 
 
@@ -19,78 +16,22 @@ public class main implements ShaderPack {
 
     public final HillaireSky sky = new HillaireSky();
 
-    private Screen screen;
+    private Resources resources;
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
-    private MappedBuffer<SceneBuffer> bufferScene;
-    private PingPongBuffer diffuseHistory;
-    private PingPongBuffer taaHistory;
     // private Froxels froxels;
 
 
     @Override
 	public void configurePipeline(Screen screen, PipelineConfig pipeline) {
-        this.screen = screen;
+        resources = new Resources(screen, pipeline);
+
+        diffuseFlipper = new Flipper<Texture2D>(resources.texDiffuse_A, resources.texDiffuse_B);
+        mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
 
         sky.Initialize(pipeline);
 
         // froxels = new Froxels(pipeline, screen);
-
-        pipeline.loadPNGTexture("blueNoiseTexture", "assets/blue_noise_64.png");
-
-        pipeline.sampler("blueNoiseSampler")
-            .addressMode(AddressMode.REPEAT)
-            .minFilter(FilterMode.NEAREST)
-            .magFilter(FilterMode.NEAREST)
-            .create();
-
-        var texOpaqueColor = pipeline.texture2D("texOpaqueColor", TextureFormat.RGBA8_UNORM)
-            .renderSize()
-            .create();
-
-        var texOpaqueNormal = pipeline.texture2D("texOpaqueNormal", TextureFormat.RGBA16_SFLOAT)
-            .renderSize()
-            .create();
-
-        var texOpaqueSpecular = pipeline.texture2D("texOpaqueSpecular", TextureFormat.RGBA8_UNORM)
-            .renderSize()
-            .create();
-
-        diffuseFlipper = new Flipper<Texture2D>(
-            pipeline.texture2D("texDiffuse_A", TextureFormat.RGBA16_SFLOAT)
-                .renderSize()
-                .create(),
-            pipeline.texture2D("texDiffuse_B", TextureFormat.RGBA16_SFLOAT)
-                .renderSize()
-                .create());
-
-        if (pipeline.settings().getBoolValue("Accumulation")) {
-            diffuseHistory = new PingPongBufferBuilder(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
-                .renderSize()
-                .createEmpty();
-        }
-
-        mainFlipper = new Flipper<Texture2D>(
-            pipeline.texture2D("mainTexture_A", TextureFormat.RGBA16_SFLOAT)
-                .windowSize()
-                .create(),
-            pipeline.texture2D("mainTexture_B", TextureFormat.RGBA16_SFLOAT)
-                .windowSize()
-                .create());
-
-        if (pipeline.settings().getBoolValue("TAA_Enabled")) {
-            taaHistory = new PingPongBufferBuilder(pipeline, "texTaaHistory", TextureFormat.RGBA16_SFLOAT)
-                .windowSize()
-                .createEmpty();
-        }
-
-        bufferScene = pipeline.mappedBuffer("scene", SceneBuffer.class);
-
-        var bufferPlanet = pipeline.mappedBuffer("planet", PlanetBuffer.class);
-        bufferPlanet.write(PlanetBuffer.Earth);
-
-        var bufferSky = pipeline.mappedBuffer("sky", SkyBuffer.class);
-        bufferSky.write(SkyBuffer.Earth);
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);
@@ -105,14 +46,14 @@ public class main implements ShaderPack {
         pipeline.object(ProgramUsage.CLOUDS, "program/object/discard", "DiscardShader");
 
         pipeline.object(ProgramUsage.BASIC, "program/object/deferred", "DeferShader")
-            .writes("color", texOpaqueColor)
-            .writes("normal", texOpaqueNormal)
-            .writes("specular", texOpaqueSpecular);
+            .writes("color", resources.texOpaqueColor)
+            .writes("normal", resources.texOpaqueNormal)
+            .writes("specular", resources.texOpaqueSpecular);
 
         pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/deferred", "DeferShader")
-            .writes("color", texOpaqueColor)
-            .writes("normal", texOpaqueNormal)
-            .writes("specular", texOpaqueSpecular);
+            .writes("color", resources.texOpaqueColor)
+            .writes("normal", resources.texOpaqueNormal)
+            .writes("specular", resources.texOpaqueSpecular);
 
         // pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/basic", "BasicShader")
         //     .writes("color", mainTexture)
@@ -165,6 +106,19 @@ public class main implements ShaderPack {
                 mainFlipper.flip();
             }
 
+            if (pipeline.settings().getBoolValue("Debug_Exposure")) {
+                stage.compute("histogram-clear", "program/post/histogram", "clear")
+                    .dispatch1D(1);
+            }
+
+            stage.compute("Histogram-Build", "program/post/histogram", "build")
+                .overrideObject("texMain_read", mainFlipper.getReader().name())
+                .dispatch2D(sizeX_16, sizeY_16);
+
+            stage.compute("Histogram-Compute", "program/post/histogram", "compute")
+                // .overrideObject("texMain_read", mainFlipper.getReader().name())
+                .dispatch1D(1);
+            
             stage.compute("Tonemap", "program/post/tonemap", "main")
                 .overrideObject("tex_read", mainFlipper.getReader().name())
                 .overrideObject("tex_write", mainFlipper.getWriter().name())
@@ -197,10 +151,7 @@ public class main implements ShaderPack {
 
     @Override
 	public void onNewFrame(FrameState state) {
-        bufferScene.write(SceneBuffer.Build(state, screen));
-        
-        if (diffuseHistory != null) diffuseHistory.flip();
-        if (taaHistory != null) taaHistory.flip();
+        resources.update(state);
 
         var rendererConfig = state.getRendererConfig();
         var settings = rendererConfig.getSettings();

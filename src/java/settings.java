@@ -28,9 +28,16 @@ public class settings implements PackSettings {
             screen_sky.option("Sky_PollutionColor_B", OptionType.floatType(0.0f, 1.0f, 0.05f, 0.0f), true);
         });
 
+        subscreen(screen, "Exposure", screen_exposure -> {
+            screen_exposure.option("Exposure_Min", OptionType.floatType(-6.0f, 0.0f, 0.2f, -3.0f), true);
+            screen_exposure.option("Exposure_Max", OptionType.floatType(0.0f, 20.0f, 0.2f, 16.0f), true);
+            screen_exposure.option("Exposure_Offset", OptionType.floatType(-2.0f, 6.0f, 0.2f, 3.4f), true);
+        });
+
         subscreen(screen, "Debug", screen_debug -> {
             screen_debug.option("Debug_WhiteWorld", OptionType.boolType(false), false);
             screen_debug.option("Debug_SkyLuts", OptionType.boolType(false), false);
+            screen_debug.option("Debug_Exposure", OptionType.boolType(false), false);
         });
     }
 

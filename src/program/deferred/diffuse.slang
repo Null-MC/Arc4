@@ -29,8 +29,6 @@ float3 transform_to_world(const in float3 normal, const in float3 local_dir) {
     float3 tangent = normalize(cross(up, normal));
     float3 bitangent = cross(normal, tangent);
 
-    // float3x3 TBN = float3x3(tangent, bitangent, normal);
-    // return mul(local_dir, TBN);
     return normalize(
         tangent * local_dir.x +
         bitangent * local_dir.y +

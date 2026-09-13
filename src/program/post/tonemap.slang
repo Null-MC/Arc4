@@ -1,4 +1,6 @@
 import aperture;
+import lib.exposure;
+
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<half3> tex_write;
@@ -11,7 +13,8 @@ Texture2D<half3> tex_read;
 void main(uint2 globalPos : SV_DispatchThreadID) {
     half3 color = tex_read[globalPos];
 
-    color *= 0.004h; // exposure
+    color /= half(exposure[0].average);
+
     color = half3(aces_fit_tonemap(color));
 
     tex_write[globalPos] = color;

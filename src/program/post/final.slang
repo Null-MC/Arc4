@@ -1,21 +1,26 @@
 import aperture;
 import settings;
+import lib.common;
 import lib.bayer;
+
 import lib.sky.transmit;
 import lib.sky.multiscatter;
 import lib.sky.view;
+import lib.exposure;
 
 
 Texture2D<half3> tex_read;
+
+Texture2D<uint> texHistogram;
 
 
 [[shader("pixel")]]
 float3 main(float2 texcoord: SV_Position) {
     uint2 uv = uint2(texcoord);
     half3 color = tex_read[uv];
+    float2 texcoord;
 
     if (userSettings.Debug_SkyLuts) {
-        float2 texcoord;
         if (debugWindow(uv, int2(8, 8), int2(512, 128), texcoord)) {
             color = HillaireSky::sampleTransmit(texcoord);
         }
@@ -24,6 +29,22 @@ float3 main(float2 texcoord: SV_Position) {
         }
         if (debugWindow(uv, int2(144, 144), int2(128, 128), texcoord)) {
             color = HillaireSky::sampleView(texcoord) * 0.008h;
+        }
+    }
+
+    if (userSettings.Debug_Exposure) {
+        if (debugWindow(uv, int2(8, 8), int2(256, 32), texcoord)) {
+            uint sampleVal = texHistogram.Sample(apt_nearestSampler, float2(texcoord.x, 0.5));
+            color.gb = half2(step(texcoord.y*texcoord.y, sampleVal / float(ap.game.screenSize.x*ap.game.screenSize.y)));
+            color.r = 0.0h;
+
+            float meter = saturate(unmix(userSettings.Exposure_Min, userSettings.Exposure_Max, log2(exposure[0].average)));
+            if (abs(texcoord.x - meter) < (4.0/ap.game.screenSize.x))
+                color.r = 1.0h - color.r;
+
+            // float shit2 = saturate(unmix(settings.Exposure_Min, settings.Exposure_Max, log2(Scene_AvgExposure) + Post_ExposureOffset));
+            // if (abs(previewCoord.x - shit2) < 0.008)
+            //     color.b = 1.0 - color.b;
         }
     }
 
