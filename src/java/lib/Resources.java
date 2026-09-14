@@ -3,6 +3,7 @@ package lib;
 import buffers.PlanetBuffer;
 import buffers.SceneBuffer;
 import buffers.SkyBuffer;
+
 import dev.irisshaders.aperture.api.objects.AddressMode;
 import dev.irisshaders.aperture.api.objects.FilterMode;
 import dev.irisshaders.aperture.api.objects.MappedBuffer;
@@ -27,8 +28,8 @@ public class Resources {
 
     public final MappedBuffer<SceneBuffer> bufferScene;
 
-    public PingPongBuffer diffuseHistory;
-    public PingPongBuffer taaHistory;
+    public PingPongBuffer2D diffuseHistory;
+    public PingPongBuffer2D taaHistory;
     
 
     public Resources(Screen screen, PipelineConfig pipeline) {
@@ -62,12 +63,12 @@ public class Resources {
             .renderSize()
             .create();
 
-        pipeline.texture2D("texHistogram", TextureFormat.R32_UINT)
-            .size(256, 1)
+        pipeline.texture1D("texHistogram", TextureFormat.R32_UINT)
+            .size(256)
             .create();
 
         if (pipeline.settings().getBoolValue("Accumulation")) {
-            diffuseHistory = new PingPongBufferBuilder(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
+            diffuseHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
                 .renderSize()
                 .createEmpty();
         }
@@ -81,7 +82,7 @@ public class Resources {
             .create();
 
         if (pipeline.settings().getBoolValue("TAA_Enabled")) {
-            taaHistory = new PingPongBufferBuilder(pipeline, "texTaaHistory", TextureFormat.RGBA16_SFLOAT)
+            taaHistory = new PingPongBufferBuilder2D(pipeline, "texTaaHistory", TextureFormat.RGBA16_SFLOAT)
                 .windowSize()
                 .createEmpty();
         }

@@ -2,6 +2,8 @@ import aperture;
 import lib.common;
 
 
+static const float BlendFactor = rcp(32);
+
 [[vk::image_format("rgba16f")]]
 RWTexture2D<half3> texDiffuse_write;
 
@@ -38,7 +40,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float2 texcoordLast = clipPosLast.xy * 0.5 + 0.5;
     
     // sample previous frame
-    half blendF = all(saturate(texcoordLast) == texcoordLast) ? 0.0125h : 1.0h;
+    half blendF = all(saturate(texcoordLast) == texcoordLast) ? BlendFactor : 1.0h;
     half3 color_last = texDiffuseHistory_read.Sample(apt_linearSampler, texcoordLast);
     color_now = ap.timing.frameCounter < 1 ? color_now : lerp(color_last, color_now, blendF);
 

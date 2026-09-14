@@ -11,7 +11,7 @@ import lib.exposure;
 
 Texture2D<half3> tex_read;
 
-Texture2D<uint> texHistogram;
+Texture1D<uint> texHistogram;
 
 
 [[shader("pixel")]]
@@ -34,7 +34,7 @@ float3 main(float2 texcoord: SV_Position) {
 
     if (userSettings.Debug_Exposure) {
         if (debugWindow(uv, int2(8, 8), int2(256, 32), texcoord)) {
-            uint sampleVal = texHistogram.Sample(apt_nearestSampler, float2(texcoord.x, 0.5));
+            uint sampleVal = texHistogram.Sample(apt_nearestSampler, texcoord.x);
             color.gb = half2(step(texcoord.y*texcoord.y, sampleVal / float(ap.game.screenSize.x*ap.game.screenSize.y)));
             color.r = 0.0h;
 

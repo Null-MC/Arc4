@@ -1,36 +1,16 @@
-public module sun;
+public module moon;
 
 import lib.common;
 
-// static const float sun_SizeRadians = 0.008901179;
-// static const float sun_distanceMm = 149600.0;
-// static const float sun_radiusMm = 695.7;
+static const float moon_SizeRadians = 0.0098;
 
 
-// float solidAngle(float dist, float rad) {
-//     return (2.0 * PI) * (1.0 - rad / (rad*rad + dist*dist));
-// }
+float skySphere(const in float3 rayDir, const in float3 lightDir, const in float solidAngle) {
+    float minCosTheta = cos(solidAngle);
+    float cosTheta = dot(rayDir, lightDir);
+    return saturate((cosTheta - minCosTheta) / (1.0 - minCosTheta));
+}
 
-// float skySphere(const in float3 rayDir, const in float3 lightDir, const in float solidAngle) {
-//     float minCosTheta = cos(solidAngle);
-//     float cosTheta = dot(rayDir, lightDir);
-//     return saturate((cosTheta - minCosTheta) / (1.0 - minCosTheta));
-// }
-
-// float renderSun(float3 rayDir, float3 sunDir) {
-//     // const float minCosTheta = cos(sunSolidAngle);
-//     return skySphere(rayDir, sunDir, sun_SizeRadians);
-// }
-
-float renderMoonWithBloom(float3 rayDir, float3 moonDir) {
-    const float moonSolidAngle = 0.83 * PI/180.0;
-    const float minCosTheta = cos(moonSolidAngle);
-
-    float cosTheta = dot(rayDir, moonDir);
-    if (cosTheta >= minCosTheta) return 1.0;
-    
-    float offset = minCosTheta - cosTheta;
-    float gaussianBloom = exp(-offset*50000.0)*0.5;
-    float invBloom = 1.0/(0.02 + offset*300.0)*0.01;
-    return gaussianBloom + invBloom;
+float renderMoon(float3 rayDir, float3 moonDir) {
+    return skySphere(rayDir, moonDir, moon_SizeRadians);
 }

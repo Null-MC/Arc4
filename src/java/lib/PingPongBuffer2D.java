@@ -1,15 +1,15 @@
 package lib;
 
 import dev.irisshaders.aperture.api.objects.Texture2D;
-import dev.irisshaders.aperture.api.objects.TextureReference;
+import dev.irisshaders.aperture.api.objects.TextureReference2D;
 
-public class PingPongBuffer {
+public class PingPongBuffer2D {
     private final Flipper<Texture2D> flipper;
-    private final TextureReference reader;
-    private final TextureReference writer;
+    private final TextureReference2D reader;
+    private final TextureReference2D writer;
 
 
-    public PingPongBuffer(Texture2D texture_A, Texture2D texture_B, TextureReference reader, TextureReference writer) {
+    public PingPongBuffer2D(Texture2D texture_A, Texture2D texture_B, TextureReference2D reader, TextureReference2D writer) {
         this.reader = reader;
         this.writer = writer;
 

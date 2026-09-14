@@ -9,6 +9,7 @@ import dev.irisshaders.aperture.api.renderer.*;
 import lib.HillaireSky;
 import lib.Resources;
 import lib.Flipper;
+import lib.Froxels;
 
 
 public class main implements ShaderPack {
@@ -19,7 +20,7 @@ public class main implements ShaderPack {
     private Resources resources;
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
-    // private Froxels froxels;
+    private Froxels froxels;
 
 
     @Override
@@ -31,7 +32,7 @@ public class main implements ShaderPack {
 
         sky.Initialize(pipeline);
 
-        // froxels = new Froxels(pipeline, screen);
+        froxels = new Froxels(pipeline, screen);
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);
@@ -62,6 +63,8 @@ public class main implements ShaderPack {
         withStage(pipeline, ProgramStage.POST_RENDER, stage -> {
             var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
             var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
+
+            froxels.render(stage);
             
             stage.compute("Deferred-Diffuse", "program/deferred/diffuse", "main")
                 .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
@@ -82,17 +85,17 @@ public class main implements ShaderPack {
 
             stage.compute("OpaqueDeferred", "program/deferred/opaque", "main")
                 .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
-                .overrideObject("tex_read", mainFlipper.getReader().name())
-                .overrideObject("tex_write", mainFlipper.getWriter().name())
+                .overrideObject("texMain_write", mainFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
             
-            // froxels.render(stage);
-
             mainFlipper.flip();
 
             stage.compute("Volumetric", "program/deferred/volumetric", "main")
-                .overrideObject("tex_read", mainFlipper.getReader().name())
-                .overrideObject("tex_write", mainFlipper.getWriter().name())
+                .overrideObject("texMain_read", mainFlipper.getReader().name())
+                .overrideObject("texMain_write", mainFlipper.getWriter().name())
+                .exportInt("Froxel_Width", froxels.BufferWidth)
+                .exportInt("Froxel_Height", froxels.BufferHeight)
+                .exportInt("Froxel_Depth", froxels.BufferDepth)
                 .dispatch2D(sizeX_16, sizeY_16);
 
             mainFlipper.flip();
@@ -116,7 +119,6 @@ public class main implements ShaderPack {
                 .dispatch2D(sizeX_16, sizeY_16);
 
             stage.compute("Histogram-Compute", "program/post/histogram", "compute")
-                // .overrideObject("texMain_read", mainFlipper.getReader().name())
                 .dispatch1D(1);
             
             stage.compute("Tonemap", "program/post/tonemap", "main")
@@ -152,6 +154,7 @@ public class main implements ShaderPack {
     @Override
 	public void onNewFrame(FrameState state) {
         resources.update(state);
+        froxels.update();
 
         var rendererConfig = state.getRendererConfig();
         var settings = rendererConfig.getSettings();

@@ -6,7 +6,7 @@ import lib.exposure;
 extern static const float Exposure_Speed = 0.8;
 
 [[vk::image_format("r32ui")]]
-RWTexture2D<uint> texHistogram;
+RWTexture1D<uint> texHistogram;
 
 Texture2D<half3> texMain_read;
 
@@ -47,19 +47,19 @@ void build(ComputeInput input) {
 
 	GroupMemoryBarrierWithGroupSync();
 
-	InterlockedAdd(texHistogram[int2(input.groupIndex,0)], histogramBins[input.groupIndex].load());
+	InterlockedAdd(texHistogram[input.groupIndex], histogramBins[input.groupIndex].load());
 }
 
 [[shader("compute")]]
 [numthreads(256)]
 void compute(uint index : SV_GroupIndex) {
-	uint countForThisBin = texHistogram[int2(index,0)];
+	uint countForThisBin = texHistogram[index];
 	exposureBins[index] = countForThisBin * index;
 
 	GroupMemoryBarrierWithGroupSync();
 
 	if (!userSettings.Debug_Exposure) {
-		texHistogram[int2(index,0)] = 0u;
+		texHistogram[index] = 0u;
 	}
 
 	// This loop will perform a weighted count of the luminance range
@@ -99,5 +99,5 @@ void compute(uint index : SV_GroupIndex) {
 [[shader("compute")]]
 [numthreads(256)]
 void clear(uint index : SV_GroupIndex) {
-    texHistogram[int2(index,0)] = 0u;
+    texHistogram[index] = 0u;
 }

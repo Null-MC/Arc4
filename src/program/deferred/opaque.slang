@@ -8,7 +8,7 @@ import lib.sky.moon;
 
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> tex_write;
+RWTexture2D<half3> texMain_write;
 
 Texture2D<half4> texDiffuse_read;
 Texture2D<half3> texOpaqueColor;
@@ -59,15 +59,15 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (planet.rayIntersectsGround(skyPos, localViewDir) <= 0.0) {
             float3 moonDir = normalize(ap.celestial.moonPosition);
 
-            float3 sunLight = renderSunWithBloom(localViewDir, sunDir) * SunColor;
+            float3 sunLight = renderSun(localViewDir, sunDir) * SunColor;
             half3 sunTransmit = planet.sampleTransmit(skyPos, sunDir);
             color += half3(sunLight * 20.0) * sunTransmit;
 
-            float3 moonLight = renderMoonWithBloom(localViewDir, moonDir) * MoonColor;
+            float3 moonLight = renderMoon(localViewDir, moonDir) * MoonColor;
             half3 moonTransmit = planet.sampleTransmit(skyPos, moonDir);
             color += half3(moonLight * 20.0) * moonTransmit;
         }
     }
 
-    tex_write[globalPos] = color;
+    texMain_write[globalPos] = color;
 }

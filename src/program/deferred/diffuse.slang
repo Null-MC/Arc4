@@ -55,8 +55,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
-    float3 sunDir = normalize(ap.celestial.sunPosition);
-
     if (depth > 0.0) {
         diffuse.a = 1.0h;
 
@@ -65,8 +63,16 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 tex_normal = octohedral::decode(normalData.zw);
 
         float3 skyPos = planet.getSkyPosition(localPos);
-        diffuse.rgb = planet.sampleTransmit(skyPos, sunDir);
-        diffuse.rgb *= half3(rcp(PI) * SunColor * max(dot(tex_normal, sunDir), 0.0));
+
+        float3 sunDir = normalize(ap.celestial.sunPosition);
+        float3 sunLight = planet.sampleTransmit(skyPos, sunDir);
+        sunLight *= SunColor * max(dot(tex_normal, sunDir), 0.0);
+
+        float3 moonDir = normalize(ap.celestial.moonPosition);
+        float3 moonLight = planet.sampleTransmit(skyPos, moonDir);
+        moonLight *= MoonColor * max(dot(tex_normal, moonDir), 0.0);
+
+        diffuse.rgb = half3(rcp(PI) * (sunLight + moonLight));
 
         float3 shadowViewPos = mul3(ap.celestial.view, localPos);
         shadowViewPos.z += 0.02;

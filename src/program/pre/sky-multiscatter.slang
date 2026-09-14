@@ -43,7 +43,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     HillaireSky::fromMultiScatterCoord(uv, planet, pos, sunDir);
     
     float3 lumTotal = 0.0;
-    float3 fms = 0.0;
+    // float3 fms = 0.0;
 
     for (int i = 0; i < sampleCount; i++) {
         float time = ap.timing.frameCounter + sampleCount * i;
@@ -85,9 +85,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 sampleTransmittance = exp(-stepSize * skySample.extinction);
 
             // Integrate within each segment.
-            float3 scatteringNoPhase = skySample.rayleighScattering + skySample.mieScattering;
-            float3 scatteringF = scatteringNoPhase * ((1.0 - sampleTransmittance) / max(skySample.extinction, 1e-5));
-            lumFactor += transmittance * scatteringF;
+            // float3 scatteringNoPhase = skySample.rayleighScattering + skySample.mieScattering;
+            // float3 scatteringF = scatteringNoPhase * ((1.0 - sampleTransmittance) / max(skySample.extinction, 1e-5));
+            // lumFactor += transmittance * scatteringF;
 
             float3 sunTransmittanceLux = planet.sampleTransmit(newPos, sunDir) * SunColor;
             float3 moonTransmittanceLux = planet.sampleTransmit(newPos, -sunDir) * MoonColor;
@@ -118,15 +118,16 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             }
         }
 
-        fms += lumFactor;
+        // fms += lumFactor;
         lumTotal += lum;
     }
 
     const float invSamples = rcp(sampleCount);
-    fms = min(fms * invSamples, 0.999);
+    // fms = min(fms * invSamples, 0.999);
     lumTotal *= invSamples;
 
-    half3 color_new = half3(lumTotal / max(1.0 - fms, 1e-8));
+    half3 color_new = half3(lumTotal);
+    // color_new = half3(color_new / max(1.0 - fms, 1e-8));
 
     half3 color = texSkyMultiScatter[globalPos];
     color = ap.timing.frameCounter < 1 ? color_new : lerp(color, color_new, half3(0.0125));

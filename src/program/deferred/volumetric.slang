@@ -2,17 +2,21 @@ import aperture;
 import settings;
 import lib.common;
 import lib.ign;
-import lib.shadows;
+import lib.froxel;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.multiscatter;
 
-static const int VL_SampleCount = 16;
+static const int VL_NearSampleCount = 8;
+static const int VL_FarSampleCount = 8;
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> tex_write;
+RWTexture2D<half3> texMain_write;
 
-Texture2D<half3> tex_read;
+Texture2D<half3> texMain_read;
+
+Texture3D<half4> texFroxel_write;
+SamplerState froxelSampler;
 
 
 [[shader("compute")]]
@@ -39,62 +43,43 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     }
 
     if (depth > 0.0) traceDistance_KM = min(traceDistance_KM, viewDist * 0.001);
-    float stepSize_KM = traceDistance_KM / VL_SampleCount;
 
-    float traceDistance = traceDistance_KM * 1000.0;
+    float traceDistanceNear_KM = min(traceDistance_KM, ap.camera.far * 0.001);
 
-    float3 shadowViewPos_start = mul3(ap.celestial.view, 0.0);
-    float3 shadowViewPos_end = mul3(ap.celestial.view, localViewDir * traceDistance);
+    float stepSizeNear_KM = traceDistanceNear_KM / VL_NearSampleCount;
 
-    float3 sunDir = normalize(ap.celestial.sunPosition);
-    float cosTheta_sun = dot(localViewDir, sunDir);
-	float miePhaseValue_sun = getMiePhase(cosTheta_sun);
-	float rayleighPhaseValue_sun = getRayleighPhase(cosTheta_sun);
+    float traceDistanceNear = traceDistanceNear_KM * 1000.0;
 
-    float3 moonDir = normalize(ap.celestial.moonPosition);
-    float cosTheta_moon = dot(localViewDir, moonDir);
-    float miePhaseValue_moon = getMiePhase(cosTheta_moon);
-    float rayleighPhaseValue_moon = getRayleighPhase(cosTheta_moon);
+    float traceDistanceFar_KM = traceDistance_KM - traceDistanceNear_KM;
+    float traceDistanceFar = traceDistanceFar_KM * 1000.0;
+
+    float3 viewDir = normalize(viewPos);
+    float3 viewPosEndNear = viewDir * traceDistanceNear;
 
     float dither = InterleavedGradientNoiseTime(globalPos);
 
     float3 scattering = 0.0;
     float3 transmittance = 1.0;
 
-    for (int i = 0; i < VL_SampleCount; i++) {
-        float stepF = (i + dither) / VL_SampleCount;
-
-        float3 shadowViewPos_trace = lerp(shadowViewPos_start, shadowViewPos_end, stepF);
-
-        float shadowF = 1.0;
-        if (let result = getShadowCascade(shadowViewPos_trace)) {
-            shadowF = ap.opaqueShadow.compare(result.position.xy, result.cascade, result.position.z);
-        }
+    for (int i = 0; i < VL_NearSampleCount; i++) {
+        float stepF = (i + dither) / VL_FarSampleCount;
 
         // do not pre-interpolate like shadows, sky is not linear space
-        float3 localPos_trace = localViewDir * (traceDistance * stepF);
+        float3 localPos_trace = localViewDir * (traceDistanceNear * stepF);
         float3 skyPos_trace = planet.getSkyPosition(localPos_trace);
 
         AtmosphereSample skySample;
         float altitude_KM = planet.getSkyAltitude(skyPos_trace);
         sky.Sample(altitude_KM, skySample);
 
-        float3 sampleTransmittance = exp(-stepSize_KM * skySample.extinction);
+        float3 sampleTransmittance = exp(-stepSizeNear_KM * skySample.extinction);
 
-        float3 sunTransmittanceLux = planet.sampleTransmit(skyPos_trace, sunDir) * SunColor * shadowF;
-        float3 moonTransmittanceLux = planet.sampleTransmit(skyPos_trace, -sunDir) * MoonColor * shadowF;
+        float3 trace_viewPos = viewPosEndNear * stepF;
+        float3 ndcPos = mul_project(ap.camera.projection, trace_viewPos);
+        float3 trace_bufferPos = Froxel_GetBufferPosition(ndcPos);
+        float3 froxel_uv = trace_bufferPos / Froxel_Resolution;
 
-        float3 psiMS = planet.sampleMultiScatter(skyPos_trace, sunDir) + Sky_MinLight;
-        //vec3 psiMS_moon = getValFromMultiScattLUT(texSkyMultiScatter, newPos, sunDir);
-
-        float3 rayleighInScattering_sun = rayleighPhaseValue_sun * sunTransmittanceLux;
-        float3 mieInScattering_sun = miePhaseValue_sun * sunTransmittanceLux;
-
-        float3 rayleighInScattering_moon = rayleighPhaseValue_moon * moonTransmittanceLux;
-        float3 mieInScattering_moon = miePhaseValue_moon * moonTransmittanceLux;
-
-        float3 inScattering = skySample.rayleighScattering * (rayleighInScattering_sun + rayleighInScattering_moon + psiMS)
-                          + skySample.mieScattering * (mieInScattering_sun + mieInScattering_moon + psiMS);
+        half3 inScattering = texFroxel_write.Sample(froxelSampler, froxel_uv).rgb;
 
         // Integrated scattering within path segment.
         float3 scatteringIntegral = inScattering * ((1.0 - sampleTransmittance) / max(skySample.extinction, 1e-5));
@@ -104,9 +89,59 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         transmittance *= sampleTransmittance;
     }
 
-    half3 color = tex_read[globalPos];
+    if (traceDistanceFar > 0.0) {
+        float3 sunDir = normalize(ap.celestial.sunPosition);
+        float cosTheta_sun = dot(localViewDir, sunDir);
+        float miePhaseValue_sun = getMiePhase(cosTheta_sun);
+        float rayleighPhaseValue_sun = getRayleighPhase(cosTheta_sun);
+
+        float3 moonDir = normalize(ap.celestial.moonPosition);
+        float cosTheta_moon = dot(localViewDir, moonDir);
+        float miePhaseValue_moon = getMiePhase(cosTheta_moon);
+        float rayleighPhaseValue_moon = getRayleighPhase(cosTheta_moon);
+
+        float stepSizeFar_KM = traceDistanceFar_KM / VL_FarSampleCount;
+
+        for (int i = 0; i < VL_FarSampleCount; i++) {
+            float stepF = (i + dither) / VL_FarSampleCount;
+
+            // do not pre-interpolate like shadows, sky is not linear space
+            float3 localPos_trace = localViewDir * (traceDistanceFar * stepF + traceDistanceNear);
+            float3 skyPos_trace = planet.getSkyPosition(localPos_trace);
+
+            AtmosphereSample skySample;
+            float altitude_KM = planet.getSkyAltitude(skyPos_trace);
+            sky.Sample(altitude_KM, skySample);
+
+            float3 sampleTransmittance = exp(-stepSizeFar_KM * skySample.extinction);
+
+            float3 sunTransmittanceLux = planet.sampleTransmit(skyPos_trace, sunDir) * SunColor;
+            float3 moonTransmittanceLux = planet.sampleTransmit(skyPos_trace, -sunDir) * MoonColor;
+
+            float3 psiMS = planet.sampleMultiScatter(skyPos_trace, sunDir) + Sky_MinLight;
+            //vec3 psiMS_moon = getValFromMultiScattLUT(texSkyMultiScatter, newPos, sunDir);
+
+            float3 rayleighInScattering_sun = rayleighPhaseValue_sun * sunTransmittanceLux;
+            float3 mieInScattering_sun = miePhaseValue_sun * sunTransmittanceLux;
+
+            float3 rayleighInScattering_moon = rayleighPhaseValue_moon * moonTransmittanceLux;
+            float3 mieInScattering_moon = miePhaseValue_moon * moonTransmittanceLux;
+
+            float3 inScattering = skySample.rayleighScattering * (rayleighInScattering_sun + rayleighInScattering_moon + psiMS)
+                            + skySample.mieScattering * (mieInScattering_sun + mieInScattering_moon + psiMS);
+
+            // Integrated scattering within path segment.
+            float3 scatteringIntegral = inScattering * ((1.0 - sampleTransmittance) / max(skySample.extinction, 1e-5));
+
+            scattering += scatteringIntegral * transmittance;
+            
+            transmittance *= sampleTransmittance;
+        }
+    }
+
+    half3 color = texMain_read[globalPos];
 
     color = half3(color * transmittance + scattering);
 
-    tex_write[globalPos] = color;
+    texMain_write[globalPos] = color;
 }
