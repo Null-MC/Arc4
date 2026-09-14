@@ -82,7 +82,7 @@ public class main implements ShaderPack {
             // TODO: blur
 
             if (pipeline.settings().getBoolValue("Accumulation")) {
-                stage.compute("Accumulate-Diffuse", "program/post/accumulate", "main")
+                stage.compute("Accumulate-Diffuse", "program/deferred/accumulate", "main")
                     .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
                     .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                     .dispatch2D(sizeX_16, sizeY_16);

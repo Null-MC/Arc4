@@ -87,9 +87,37 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 rayDir = sampleCosineWeightedHemisphere(rayNoise);
         rayDir = transform_to_world(tex_normal, rayDir);
 
-        float traceDist = DDA::trace(localPos + 0.02 * geo_normal, rayDir, 32);
-        if (traceDist < 0.0)
-            diffuse.rgb += planet.sampleView(skyPos, rayDir, sunDir);
+        float3 hit_localNormal;
+        float traceDist = DDA::trace(hit_localNormal, localPos + 0.02 * geo_normal, rayDir, 32);
+        if (traceDist < 0.0) {
+            // sky
+            diffuse.rgb += PI * planet.sampleView(skyPos, rayDir, sunDir);
+        }
+        else {
+            // hit
+            float3 hit_localPos = localPos + rayDir * traceDist;
+            float3 hit_skyPos = planet.getSkyPosition(hit_localPos);
+
+            float3 sunLight = planet.sampleTransmit(hit_skyPos, sunDir);
+            sunLight *= SunColor * max(dot(hit_localNormal, sunDir), 0.0);
+
+            float3 moonLight = planet.sampleTransmit(hit_skyPos, moonDir);
+            moonLight *= MoonColor * max(dot(hit_localNormal, moonDir), 0.0);
+
+            float3 hit_diffuse = sunLight + moonLight;
+
+            float3 hit_shadowViewPos = mul3(ap.celestial.view, hit_localPos);
+            hit_shadowViewPos.z += 0.02;
+            
+            if (let result = getShadowCascade(hit_shadowViewPos)) {
+                hit_diffuse *= ap.opaqueShadow.compare(result.position.xy, result.cascade, result.position.z);
+            }
+
+            // fake albedo since no texture data
+            float3 albedo = 0.85;
+
+            diffuse.rgb += PI * albedo * hit_diffuse;
+        }
     }
 
     texDiffuse_write[globalPos] = diffuse;
