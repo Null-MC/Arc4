@@ -34,6 +34,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         half3 diffuse = texDiffuse_read[globalPos].rgb;
         half4 specular = texOpaqueSpecular[globalPos];
 
+        diffuse *= rcp(half3(PI));
+
         half emission = fract(specular.a);
         diffuse += emission * 1200.0h;
 

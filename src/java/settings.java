@@ -28,6 +28,11 @@ public class settings implements PackSettings {
             screen_sky.option("Sky_PollutionColor_B", OptionType.floatType(0.0f, 1.0f, 0.05f, 0.0f), true);
         });
 
+        subscreen(screen, "Bloom", screen_bloom -> {
+            screen_bloom.option("Bloom_Enabled", OptionType.boolType(true), false);
+            screen_bloom.option("Bloom_Strength", OptionType.floatType(0.0f, 8.0f, 0.2f, 2.0f), true);
+        });
+
         subscreen(screen, "Exposure", screen_exposure -> {
             screen_exposure.option("Exposure_Min", OptionType.floatType(-6.0f, 0.0f, 0.2f, -3.0f), true);
             screen_exposure.option("Exposure_Max", OptionType.floatType(0.0f, 20.0f, 0.2f, 16.0f), true);

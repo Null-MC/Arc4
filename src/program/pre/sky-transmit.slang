@@ -9,8 +9,8 @@ import lib.sky.transmit;
 extern static const int BufferWidth;
 extern static const int BufferHeight;
 
-static const half historyBlendF = rcp(80.0h);
-static const int sunTransmittanceSteps = 16;
+static const half historyBlendF = rcp(24.h);
+static const int sunTransmittanceSteps = 20;
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<half3> texSkyTransmit;
@@ -27,12 +27,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 transmittance = 0.0;
     if (planet.rayIntersectsGround(pos, sunDir) <= 0.0) {
-        float atmoDist = planet.rayIntersectsAtmosphere(pos, sunDir);
+        float atmoDist_KM = planet.rayIntersectsAtmosphere(pos, sunDir);
         
         float dither = InterleavedGradientNoiseTime(globalPos);
-        float stepSize = atmoDist / sunTransmittanceSteps;
+        float stepSize = atmoDist_KM / sunTransmittanceSteps;
 
-        float3 accumDepth = float3(0.0);
+        float3 accumExtinction = 0.0;
 
         for (int i = 0; i < sunTransmittanceSteps; i++) {
             float t = (i + dither) * stepSize;
@@ -42,10 +42,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float altitude_KM = planet.getSkyAltitude(newPos);
             sky.Sample(altitude_KM, sample);
             
-            accumDepth += sample.extinction;
+            accumExtinction += sample.extinction;
         }
 
-        transmittance = exp(-stepSize * accumDepth);
+        transmittance = exp(-stepSize * accumExtinction);
     }
 
     half3 color_new = half3(saturate(transmittance));

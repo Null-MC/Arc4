@@ -6,21 +6,24 @@ import dev.irisshaders.aperture.api.objects.*;
 import dev.irisshaders.aperture.api.pipeline.*;
 import dev.irisshaders.aperture.api.renderer.*;
 
-import lib.HillaireSky;
-import lib.Resources;
+import pipeline.Froxels;
+import pipeline.Bloom;
+import pipeline.Exposure;
+import pipeline.HillaireSky;
+import pipeline.Resources;
 import lib.Flipper;
-import lib.Froxels;
 
 
 public class main implements ShaderPack {
     private static final int CASCADE_COUNT = 4;
 
-    public final HillaireSky sky = new HillaireSky();
-
+    private HillaireSky sky;
+    private Exposure exposure;
+    private Froxels froxels;
+    private Bloom bloom;
     private Resources resources;
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
-    private Froxels froxels;
 
 
     @Override
@@ -30,9 +33,13 @@ public class main implements ShaderPack {
         diffuseFlipper = new Flipper<Texture2D>(resources.texDiffuse_A, resources.texDiffuse_B);
         mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
 
-        sky.Initialize(pipeline);
+        sky = new HillaireSky(pipeline);
+        exposure = new Exposure(screen, pipeline);
+        froxels = new Froxels(screen, pipeline);
 
-        froxels = new Froxels(pipeline, screen);
+        if (pipeline.settings().getBoolValue("Bloom_Enabled")) {
+            bloom = new Bloom(screen, pipeline);
+        }
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);
@@ -109,17 +116,12 @@ public class main implements ShaderPack {
                 mainFlipper.flip();
             }
 
-            if (pipeline.settings().getBoolValue("Debug_Exposure")) {
-                stage.compute("histogram-clear", "program/post/histogram", "clear")
-                    .dispatch1D(1);
+            if (bloom != null) {
+                bloom.render(stage, mainFlipper.getReader());
+                // do not flip, writes to reader!
             }
 
-            stage.compute("Histogram-Build", "program/post/histogram", "build")
-                .overrideObject("texMain_read", mainFlipper.getReader().name())
-                .dispatch2D(sizeX_16, sizeY_16);
-
-            stage.compute("Histogram-Compute", "program/post/histogram", "compute")
-                .dispatch1D(1);
+            exposure.render(stage, mainFlipper.getReader());
             
             stage.compute("Tonemap", "program/post/tonemap", "main")
                 .overrideObject("tex_read", mainFlipper.getReader().name())
@@ -129,6 +131,7 @@ public class main implements ShaderPack {
             mainFlipper.flip();
 
             if (pipeline.settings().getBoolValue("TAA_Enabled")) {
+                // TAA CAS Sharpening
                 stage.compute("Sharpen", "program/post/sharpen", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
                     .overrideObject("texMain_write", mainFlipper.getWriter().name())

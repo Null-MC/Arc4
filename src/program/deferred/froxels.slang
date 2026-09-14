@@ -86,7 +86,7 @@ void main(ComputeInput input) {
         // lumFactor += transmittance * scatteringF;
 
         float3 sunLight = planet.sampleTransmit(traceSkyPos, sunDir) * SunColor;
-        float3 moonLight = planet.sampleTransmit(traceSkyPos, -sunDir) * MoonColor;
+        float3 moonLight = planet.sampleTransmit(traceSkyPos, moonDir) * MoonColor;
 
         float3 inScattering = skySample.mieScattering * (miePhase_sun * sunLight + miePhase_moon * moonLight) + Sky_MinLight;
 
@@ -97,8 +97,10 @@ void main(ComputeInput input) {
         transmittance *= sampleTransmittance;
     }
 
+    // TODO: replace with random trace
     float3 indirect = planet.sampleMultiScatter(skyPos, sunDir);
-    scattering = indirect + scattering * shadowF;
+
+    scattering = indirect * transmittance + scattering * shadowF;
 
 
     // project last frame position and accumulate

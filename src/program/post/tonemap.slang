@@ -3,19 +3,20 @@ import lib.exposure;
 
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> tex_write;
+RWTexture2D<float3> tex_write;
 
-Texture2D<half3> tex_read;
+Texture2D<float3> tex_read;
 
 
 [[shader("compute")]]
 [numthreads(16,16)]
 void main(uint2 globalPos : SV_DispatchThreadID) {
-    half3 color = tex_read[globalPos];
+    float3 color = tex_read[globalPos];
 
-    color /= half(exposure[0].average);
+    color = max(color, 0.0);
+    color /= max(exposure[0].average, 1e-8);
 
-    color = half3(aces_fit_tonemap(color));
+    color = aces_fit_tonemap(color);
 
     tex_write[globalPos] = color;
 }

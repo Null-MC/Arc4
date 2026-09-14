@@ -1,4 +1,4 @@
-package lib;
+package pipeline;
 
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.AddressMode;
@@ -8,6 +8,8 @@ import dev.irisshaders.aperture.api.objects.Texture3D;
 import dev.irisshaders.aperture.api.objects.TextureFormat;
 import dev.irisshaders.aperture.api.objects.TextureReference3D;
 import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
+
+import lib.Flipper;
 
 public class Froxels {
     private final Flipper<Texture3D> flipper;
@@ -19,7 +21,7 @@ public class Froxels {
     public int BufferDepth;
 
     
-    public Froxels(PipelineConfig pipeline, Screen screen) {
+    public Froxels(Screen screen, PipelineConfig pipeline) {
         BufferWidth = (int)Math.ceil(screen.renderWidth() / 8f);
         BufferHeight = (int)Math.ceil(screen.renderHeight() / 8f);
         BufferDepth = 64;

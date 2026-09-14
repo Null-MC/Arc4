@@ -28,6 +28,7 @@ struct SceneBuffer {
 ConstantBuffer<SceneBuffer, ScalarDataLayout> scene;
 
 internal extern static const bool value_Accumulation;
+internal extern static const bool value_Bloom_Enabled;
 internal extern static const bool value_Debug_Exposure;
 internal extern static const bool value_Debug_SkyLuts;
 internal extern static const bool value_Debug_WhiteWorld;
@@ -35,6 +36,7 @@ internal extern static const int value_Shadow_Resolution;
 internal extern static const bool value_TAA_Enabled;
 
 struct Settings {
+    float Bloom_Strength;
     float Exposure_Max;
     float Exposure_Min;
     float Exposure_Offset;
@@ -48,6 +50,7 @@ struct Settings {
     float Sky_Turbidity;
     float SunAngle;
     static const bool Accumulation = value_Accumulation;
+    static const bool Bloom_Enabled = value_Bloom_Enabled;
     static const bool Debug_Exposure = value_Debug_Exposure;
     static const bool Debug_SkyLuts = value_Debug_SkyLuts;
     static const bool Debug_WhiteWorld = value_Debug_WhiteWorld;

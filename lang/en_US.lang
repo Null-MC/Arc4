@@ -17,6 +17,10 @@ option.Sky_FogIntensity=Fog Intensity
 option.Sky_Humidity=Humidity
 option.Sky_Turbidity=Turbidity
 
+screen.Bloom=Bloom
+option.Bloom_Strength=Strength
+suffix.Bloom_Strength=%
+
 screen.Exposure=Exposure
 option.Exposure_Min=Min
 option.Exposure_Max=Max

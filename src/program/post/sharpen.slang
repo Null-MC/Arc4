@@ -48,8 +48,8 @@ void main(ComputeInput input) {
 
             if (i_shared < sharedBufferSize) {
                 int2 uv_i = getSharedUV(i_shared);
-                half3 color = texMain_read[uv_base + uv_i].rgb;
-                sharedBuffer[i_shared] = color;
+                half3 color = texMain_read[uv_base + uv_i];
+                sharedBuffer[i_shared] = saturate(color);
             }
         }
     }

@@ -1,4 +1,4 @@
-package lib;
+package pipeline;
 
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.AddressMode;
@@ -9,20 +9,20 @@ import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
 
 
 public class HillaireSky {
-    public int TransmitBufferWidth = 256;
-    public int TransmitBufferHeight = 64;
-    public Texture2D TransmitTexture;
+    public final int TransmitBufferWidth = 256;
+    public final int TransmitBufferHeight = 64;
+    public final Texture2D TransmitTexture;
 
-    public int MultiScatterBufferWidth = 32;
-    public int MultiScatterBufferHeight = 32;
-    public Texture2D MultiScatterTexture;
+    public final int MultiScatterBufferWidth = 32;
+    public final int MultiScatterBufferHeight = 32;
+    public final Texture2D MultiScatterTexture;
 
-    public int ViewBufferWidth = 256;
-    public int ViewBufferHeight = 256;
-    public Texture2D ViewTexture;
+    public final int ViewBufferWidth = 256;
+    public final int ViewBufferHeight = 256;
+    public final Texture2D ViewTexture;
 
 
-    public void Initialize(PipelineConfig pipeline) {
+    public HillaireSky(PipelineConfig pipeline) {
         TransmitTexture = pipeline.texture2D("texSkyTransmit", TextureFormat.RGBA16_UNORM)
             .size(TransmitBufferWidth, TransmitBufferHeight)
             .create();

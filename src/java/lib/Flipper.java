@@ -1,6 +1,6 @@
 package lib;
 
-public class Flipper<T> {
+public class Flipper<T> implements IFlipper {
     private T objA;
     private T objB;
     private boolean flipped;

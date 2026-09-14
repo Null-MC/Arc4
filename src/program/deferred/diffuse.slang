@@ -72,7 +72,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 moonLight = planet.sampleTransmit(skyPos, moonDir);
         moonLight *= MoonColor * max(dot(tex_normal, moonDir), 0.0);
 
-        diffuse.rgb = half3(rcp(PI) * (sunLight + moonLight));
+        diffuse.rgb = half3(sunLight + moonLight);
 
         float3 shadowViewPos = mul3(ap.celestial.view, localPos);
         shadowViewPos.z += 0.02;

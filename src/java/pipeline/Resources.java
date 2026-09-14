@@ -1,4 +1,4 @@
-package lib;
+package pipeline;
 
 import buffers.PlanetBuffer;
 import buffers.SceneBuffer;
@@ -12,6 +12,9 @@ import dev.irisshaders.aperture.api.objects.Texture2D;
 import dev.irisshaders.aperture.api.objects.TextureFormat;
 import dev.irisshaders.aperture.api.pipeline.FrameState;
 import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
+
+import lib.PingPongBuffer2D;
+import lib.PingPongBufferBuilder2D;
 
 public class Resources {
     private Screen screen;
@@ -63,10 +66,6 @@ public class Resources {
             .renderSize()
             .create();
 
-        pipeline.texture1D("texHistogram", TextureFormat.R32_UINT)
-            .size(256)
-            .create();
-
         if (pipeline.settings().getBoolValue("Accumulation")) {
             diffuseHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
                 .renderSize()
@@ -94,8 +93,6 @@ public class Resources {
 
         var bufferSky = pipeline.mappedBuffer("sky", SkyBuffer.class);
         bufferSky.write(SkyBuffer.Earth);
-
-        pipeline.buffer("exposure", 4);
     }
 
     public void update(FrameState state) {

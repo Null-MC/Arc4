@@ -10,8 +10,8 @@ static const bool planetSurfaceEnabled = true;
 
 static const float Sky_MinLight = 0.0;//0.08;
 
-static const float3 SunColor = pow(float3(1.0, 0.95, 0.9), 2.2) * 2000.0;
-static const float3 MoonColor = pow(float3(0.5, 0.5, 0.55), 2.2) * 2.2;
+static const float3 SunColor = 2000.0;// * pow(float3(1.0, 0.95, 0.9), 2.2);
+static const float3 MoonColor = 0.2;// * pow(float3(0.5, 0.5, 0.55), 2.2);
 
 
 extension PlanetBuffer {
@@ -87,6 +87,37 @@ extension SkyBuffer {
         // Note: Ozone absorption would be added to this total extinction
         outSample.extinction = outSample.rayleighScattering + outSample.mieScattering + mieAbsorption;
     }
+    
+    // public void trace(out float3 scattering, out float3 transmittance, const in float3 origin, const in float3 rayDir, const in float rayDist, const in int stepCount) {
+    //     scattering = 0.0;
+    //     transmittance = 1.0;
+
+    //     for (int i = 0; i < stepCount; i++) {
+    //         float3 traceSkyPos = skyPos + i * stepDist * skyLightDir;
+
+    //         AtmosphereSample skySample;
+    //         float altitude_KM = planet.getSkyAltitude(traceSkyPos);
+    //         sky.Sample(altitude_KM, skySample);
+
+    //         float3 sampleTransmittance = exp(-stepDist * skySample.extinction);
+
+    //         // Integrate within each segment.
+    //         // float3 scatteringNoPhase = skySample.rayleighScattering + skySample.mieScattering;
+    //         // float3 scatteringF = (scatteringNoPhase - scatteringNoPhase * sampleTransmittance) / skySample.extinction;
+    //         // lumFactor += transmittance * scatteringF;
+
+    //         float3 sunLight = planet.sampleTransmit(traceSkyPos, sunDir) * SunColor;
+    //         float3 moonLight = planet.sampleTransmit(traceSkyPos, moonDir) * MoonColor;
+
+    //         float3 inScattering = skySample.mieScattering * (miePhase_sun * sunLight + miePhase_moon * moonLight) + Sky_MinLight;
+
+    //         // Integrated scattering within path segment.
+    //         float3 scatteringIntegral = (inScattering - inScattering * sampleTransmittance) / skySample.extinction;
+
+    //         scattering += scatteringIntegral * transmittance;
+    //         transmittance *= sampleTransmittance;
+    //     }
+    // }
 };
 
 struct AtmosphereSample {

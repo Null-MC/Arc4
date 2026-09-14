@@ -108,6 +108,9 @@ void main(ComputeInput input) {
         }
 
         half3 colorFinal = lerp(lastColor.rgb, in0, 1.0h / (mixRate + 1.0h));
+
+        if (ap.timing.frameCounter == 0) colorFinal = in0;
+        
         colorFinal = clamp(colorFinal, color_min, color_max);
         
         texMain_write[input.globalPos.xy] = colorFinal;
