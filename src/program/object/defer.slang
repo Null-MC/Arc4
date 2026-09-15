@@ -4,6 +4,8 @@ import object_shader;
 import lib.octohedral;
 
 
+extern static const bool IsTranslucent = false;
+
 struct VertexData {
     float4 color : COLOR;
     float2 uv : TEXCOORD;
@@ -11,12 +13,14 @@ struct VertexData {
     float3 tangent;
     nointerpolation float tangent_w;
     float3 pos;
+    nointerpolation uint blockId;
 }
 
 struct FragmentData {
     half4 color;
     half4 normal;
     half4 specular;
+    uint data;
 }
 
 
@@ -38,6 +42,13 @@ struct DeferShader : Shader<VertexData, FragmentData> {
 
         if (userSettings.TAA_Enabled) {
             clipPos.xy += scene.TAA_jitter * (2.0 * clipPos.w);
+        }
+
+        if (let block = input.blockID()) {
+            output.blockId = block.data.customId;
+        }
+        else {
+            output.blockId = 0u;
         }
     }
 
@@ -72,11 +83,14 @@ struct DeferShader : Shader<VertexData, FragmentData> {
             specular = half4(texSpecularMap.sampleTexture(input.uv));
         }
 
+        if (!IsTranslucent) color.a = 1.0h;
+
         FragmentData output;
         output.color = color;
         output.normal.xy = octohedral::encode(half3(geo_normal));
         output.normal.zw = octohedral::encode(half3(tex_normal));
         output.specular = specular;
+        output.data = input.blockId;
         return output;
     }
 }

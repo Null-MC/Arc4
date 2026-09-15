@@ -4,6 +4,7 @@ import lib.common;
 import lib.dda;
 import lib.octohedral;
 import lib.shadows;
+import lib.noise.ign;
 import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
@@ -13,7 +14,7 @@ import lib.sky.view;
 [[vk::image_format("rgba16f")]]
 RWTexture2D<half4> texDiffuse_write;
 
-Texture2D<half4> texOpaqueNormal;
+Texture2D<half4> texDeferNormal;
 
 float3 sampleCosineWeightedHemisphere(const in float2 u) {
     float r = sqrt(u.x);
@@ -42,7 +43,7 @@ float3 transform_to_world(const in float3 normal, const in float3 local_dir) {
 void main(uint2 globalPos : SV_DispatchThreadID) {
     if (any(globalPos >= ap.game.renderSize)) return;
 
-    float depth = ap.opaqueDepth[globalPos];
+    float depth = ap.depth[globalPos];
     half4 diffuse = 0.0h;
 
     float2 texcoord = (globalPos + 0.5) / ap.game.renderSize;
@@ -58,7 +59,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (depth > 0.0) {
         diffuse.a = 1.0h;
 
-        half4 normalData = texOpaqueNormal[globalPos];
+        half4 normalData = texDeferNormal[globalPos];
         float3 geo_normal = octohedral::decode(normalData.xy);
         float3 tex_normal = octohedral::decode(normalData.zw);
 
@@ -88,7 +89,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         rayDir = transform_to_world(tex_normal, rayDir);
 
         float3 hit_localNormal;
-        float traceDist = DDA::trace(hit_localNormal, localPos + 0.02 * geo_normal, rayDir, 32);
+        float traceDist = DDA::trace(hit_localNormal, localPos + 0.02 * geo_normal, rayDir, MaxTraceSteps);
         if (traceDist < 0.0) {
             // sky
             diffuse.rgb += PI * planet.sampleView(skyPos, rayDir, sunDir);
@@ -106,17 +107,26 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 hit_diffuse = sunLight + moonLight;
 
-            float3 hit_shadowViewPos = mul3(ap.celestial.view, hit_localPos);
-            hit_shadowViewPos.z += 0.02;
-            
-            if (let result = getShadowCascade(hit_shadowViewPos)) {
-                hit_diffuse *= ap.opaqueShadow.compare(result.position.xy, result.cascade, result.position.z);
+            float3 skyLightDir = normalize(ap.celestial.position);
+
+            float3 shadow_normal;
+            float shadow_traceDist = DDA::trace(shadow_normal, hit_localPos + 0.02 * hit_localNormal, skyLightDir, MaxTraceSteps);
+
+            if (shadow_traceDist >= 0.0) hit_diffuse = 0.0;
+            else {
+                // fallback to shadowmap
+                float3 hit_shadowViewPos = mul3(ap.celestial.view, hit_localPos);
+                hit_shadowViewPos.z += 0.02;
+                
+                if (let result = getShadowCascade(hit_shadowViewPos)) {
+                    hit_diffuse *= ap.opaqueShadow.compare(result.position.xy, result.cascade, result.position.z);
+                }
             }
 
             // fake albedo since no texture data
-            float3 albedo = 0.85;
+            float3 hit_albedo = fakeTexture(hit_localPos);
 
-            diffuse.rgb += PI * albedo * hit_diffuse;
+            diffuse.rgb += hit_albedo * hit_diffuse;
         }
     }
 

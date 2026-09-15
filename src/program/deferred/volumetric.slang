@@ -1,7 +1,7 @@
 import aperture;
 import settings;
 import lib.common;
-import lib.ign;
+import lib.noise.ign;
 import lib.froxel;
 import lib.sky.shared;
 import lib.sky.transmit;
@@ -25,7 +25,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (any(globalPos >= ap.game.screenSize)) return;
 
     float2 texcoord = (globalPos + 0.5) / ap.game.screenSize;
-    float depth = ap.opaqueDepth[globalPos];
+    float depth = ap.depth[globalPos];
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
@@ -35,6 +35,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 localViewDir = localPos / viewDist;
 
     float3 skyPos = planet.getSkyPosition(0.0);
+
+    skyPos.y = max(skyPos.y, planet.RadiusGround_KM + 0.002);
+
     float traceDistance_KM = planet.rayIntersectsAtmosphere(skyPos, localViewDir);
 
     if (planetSurfaceEnabled) {
@@ -56,7 +59,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 viewDir = normalize(viewPos);
     float3 viewPosEndNear = viewDir * traceDistanceNear;
 
-    float dither = InterleavedGradientNoiseTime(globalPos);
+    float dither = IGN::getAnimated(globalPos);
 
     float3 scattering = 0.0;
     float3 transmittance = 1.0;

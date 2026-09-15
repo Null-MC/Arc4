@@ -1,7 +1,12 @@
 public module common;
 
+import aperture;
+
 
 static const float PI = 3.1415926535897932384626433832795;
+
+static const int MaxTraceSteps = 32;
+static const float3 WaterAbsorb = 1.0 - pow(float3(0.427, 0.827, 0.949), 2.2);
 
 
 float luminance(const in float3 color) {
@@ -37,6 +42,10 @@ T pow3<T>(const in T value) where T: IArithmetic {
     return value*value*value;
 }
 
+T pow5<T>(const in T value) where T: IArithmetic {
+    return value*value*value*value*value;
+}
+
 T unmix<T>(const in T valueMin, const in T valueMax, const in T value) where T: IFloat {
     return (value - valueMin) / (valueMax - valueMin);
 }
@@ -48,4 +57,15 @@ float3 mul3(const in float4x4 matrix, const in float3 vector) {
 float3 mul_project(const in float4x4 matrix, const in float3 vector) {
     float4 result = mul(matrix, float4(vector, 1.0));
     return result.xyz / result.w;
+}
+
+float3 fakeTexture(const in float3 localPos) {
+    const float3 color1 = 1.0;
+    const float3 color2 = 0.5;
+
+    float3 worldFract = fract(localPos + ap.camera.position);
+
+    float3 f = floor(worldFract * 4.0);
+    float checker = fmod(f.x + f.y + f.z, 2.0);
+    return lerp(color1, color2, checker);
 }

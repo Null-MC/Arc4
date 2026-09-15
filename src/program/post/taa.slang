@@ -83,7 +83,7 @@ void main(ComputeInput input) {
 
     if (all(input.globalPos < ap.game.screenSize)) {
         float2 texcoord = (input.globalPos + 0.5) / ap.game.screenSize;
-        float depth = ap.opaqueDepth[input.globalPos];
+        float depth = ap.depth[input.globalPos];
 
         float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
         float3 clipPosLast = reproject(clipPos);

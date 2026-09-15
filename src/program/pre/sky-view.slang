@@ -1,7 +1,7 @@
 import aperture;
 import settings;
 import lib.common;
-import lib.ign;
+import lib.noise.ign;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.multiscatter;
@@ -26,7 +26,7 @@ half3 raymarchScattering(uint2 globalPos, float3 pos, float3 rayDir, float3 sunD
     float miePhaseValue_moon = getMiePhase(-cosTheta);
     float rayleighPhaseValue_moon = getRayleighPhase(-cosTheta);
 
-    float dither = InterleavedGradientNoiseTime(globalPos);
+    float dither = IGN::getAnimated(globalPos);
     float stepSize = tMax / numScatteringSteps;
 
     float3 scattering = 0.0;
@@ -38,6 +38,7 @@ half3 raymarchScattering(uint2 globalPos, float3 pos, float3 rayDir, float3 sunD
         
         AtmosphereSample skySample;
         float altitude_KM = planet.getSkyAltitude(newPos);
+        // altitude_KM = max(altitude_KM, 1e-6);
         sky.Sample(altitude_KM, skySample);
 
         float3 sampleTransmittance = exp(-stepSize * skySample.extinction);
@@ -78,7 +79,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 skyPos = planet.getSkyPosition(0.0);
 
     // ensure view is above planet
-    skyPos.y = max(skyPos.y, planet.RadiusGround_KM);
+    skyPos.y = max(skyPos.y, planet.RadiusGround_KM + 0.002);
 
     float3 rayDir, sunDir;
     HillaireSky::fromViewCoord(texcoord, planet, skyPos, rayDir, sunDir);

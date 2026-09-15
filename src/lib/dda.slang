@@ -39,7 +39,7 @@ namespace DDA {
             var voxelBlock = ap.blocks[ap.voxel[voxelPos]];
 
             if (voxelBlock.isFullBlock) {
-                hit_normal = sign(-localDir) * stepAxisNext;
+                hit_normal = -sign(localDir) * stepAxis;
                 return distance(currPos - cameraFract, localPos);
             }
 

@@ -48,7 +48,8 @@ public class HillaireSky {
             .create();
         
         pipeline.sampler("skyViewSampler")
-            .addressMode(AddressMode.REPEAT)
+            .addressModeX(AddressMode.REPEAT)
+            .addressModeY(AddressMode.CLAMP)
             .minFilter(FilterMode.LINEAR)
             .magFilter(FilterMode.LINEAR)
             .create();

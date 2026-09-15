@@ -18,6 +18,7 @@ option.Sky_Humidity=Humidity
 option.Sky_Turbidity=Turbidity
 
 screen.Bloom=Bloom
+option.Bloom_Enabled=Enabled
 option.Bloom_Strength=Strength
 suffix.Bloom_Strength=%
 

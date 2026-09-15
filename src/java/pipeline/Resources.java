@@ -19,12 +19,16 @@ import lib.PingPongBufferBuilder2D;
 public class Resources {
     private Screen screen;
 
-    public final Texture2D texOpaqueColor;
-    public final Texture2D texOpaqueNormal;
-    public final Texture2D texOpaqueSpecular;
+    public final Texture2D texDeferColor;
+    public final Texture2D texDeferNormal;
+    public final Texture2D texDeferSpecular;
+    public final Texture2D texDeferData;
 
     public final Texture2D texDiffuse_A;
     public final Texture2D texDiffuse_B;
+
+    public final Texture2D texSpecular_A;
+    public final Texture2D texSpecular_B;
 
     public final Texture2D mainTexture_A;
     public final Texture2D mainTexture_B;
@@ -46,15 +50,19 @@ public class Resources {
             .magFilter(FilterMode.NEAREST)
             .create();
 
-        texOpaqueColor = pipeline.texture2D("texOpaqueColor", TextureFormat.RGBA8_UNORM)
+        texDeferColor = pipeline.texture2D("texDeferColor", TextureFormat.RGBA8_UNORM)
             .renderSize()
             .create();
 
-        texOpaqueNormal = pipeline.texture2D("texOpaqueNormal", TextureFormat.RGBA16_SFLOAT)
+        texDeferNormal = pipeline.texture2D("texDeferNormal", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
             .create();
 
-        texOpaqueSpecular = pipeline.texture2D("texOpaqueSpecular", TextureFormat.RGBA8_UNORM)
+        texDeferSpecular = pipeline.texture2D("texDeferSpecular", TextureFormat.RGBA8_UNORM)
+            .renderSize()
+            .create();
+
+        texDeferData = pipeline.texture2D("texDeferData", TextureFormat.R32_UINT)
             .renderSize()
             .create();
 
@@ -63,6 +71,14 @@ public class Resources {
             .create();
 
         texDiffuse_B = pipeline.texture2D("texDiffuse_B", TextureFormat.RGBA16_SFLOAT)
+            .renderSize()
+            .create();
+
+        texSpecular_A = pipeline.texture2D("texSpecular_A", TextureFormat.RGBA16_SFLOAT)
+            .renderSize()
+            .create();
+
+        texSpecular_B = pipeline.texture2D("texSpecular_B", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
             .create();
 

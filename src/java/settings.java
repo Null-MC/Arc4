@@ -9,7 +9,7 @@ import dev.irisshaders.aperture.api.settings.SettingsScreen;
 public class settings implements PackSettings {
 	@Override
 	public void createSettings(SettingsManager manager, SettingsScreen screen) {
-        screen.option("SunAngle", OptionType.floatType(-90.0f, 90.0f, 2.0f, 20.0f), true);
+        screen.option("SunAngle", OptionType.floatType(-90.0f, 90.0f, 2.0f, 2.0f), true);
         screen.option("SeaLevel", OptionType.floatType(0.0f, 256.0f, 5.0f, 60.0f), true);
         screen.option("TAA_Enabled", OptionType.boolType(true), false);
         screen.option("Accumulation", OptionType.boolType(false), false);

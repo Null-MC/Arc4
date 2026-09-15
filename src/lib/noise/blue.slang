@@ -11,6 +11,17 @@ namespace BlueNoise {
         return r;// pow(r, 2.2);
     }
 
+    float sampleAnimated1D(const in int2 pixel, const in int sampleIndex, const in int frame) {
+        int2 sampleOffset = int2(23, 47) * sampleIndex;
+        int2 pixelA = pixel + sampleOffset;
+
+        float2 uvA = (pixelA + 0.5) / 64.0;
+        float noise = sample(uvA);
+
+        const float2 frameRotation = float2(0.754877666, 0.569840296) * float(frame);
+        return frac(noise + frameRotation.x);
+    }
+
     float2 sampleAnimated2D(const in int2 pixel, const in int sampleIndex, const in int frame) {
         int2 sampleOffset = int2(23, 47) * sampleIndex;
         int2 pixelA = pixel + sampleOffset;

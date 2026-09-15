@@ -7,6 +7,7 @@ import dev.irisshaders.aperture.api.pipeline.*;
 import dev.irisshaders.aperture.api.renderer.*;
 
 import pipeline.Froxels;
+import pipeline.BlockMap;
 import pipeline.Bloom;
 import pipeline.Exposure;
 import pipeline.HillaireSky;
@@ -24,6 +25,8 @@ public class main implements ShaderPack {
     private Resources resources;
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
+    private Flipper<Texture2D> specularFlipper;
+    private BlockMap blocks = new BlockMap();
 
 
     @Override
@@ -31,6 +34,7 @@ public class main implements ShaderPack {
         resources = new Resources(screen, pipeline);
 
         diffuseFlipper = new Flipper<Texture2D>(resources.texDiffuse_A, resources.texDiffuse_B);
+        specularFlipper = new Flipper<Texture2D>(resources.texSpecular_A, resources.texSpecular_B);
         mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
 
         sky = new HillaireSky(pipeline);
@@ -53,15 +57,18 @@ public class main implements ShaderPack {
         pipeline.object(ProgramUsage.SKY_TEXTURES, "program/object/discard", "DiscardShader");
         pipeline.object(ProgramUsage.CLOUDS, "program/object/discard", "DiscardShader");
 
-        pipeline.object(ProgramUsage.BASIC, "program/object/deferred", "DeferShader")
-            .writes("color", resources.texOpaqueColor)
-            .writes("normal", resources.texOpaqueNormal)
-            .writes("specular", resources.texOpaqueSpecular);
+        pipeline.object(ProgramUsage.BASIC, "program/object/defer", "DeferShader")
+            .writes("color", resources.texDeferColor, BlendMode.NONE)
+            .writes("normal", resources.texDeferNormal, BlendMode.NONE)
+            .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
+            .writes("data", resources.texDeferData, BlendMode.NONE);
 
-        pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/deferred", "DeferShader")
-            .writes("color", resources.texOpaqueColor)
-            .writes("normal", resources.texOpaqueNormal)
-            .writes("specular", resources.texOpaqueSpecular);
+        pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/defer", "DeferShader")
+            .exportBool("IsTranslucent", true)
+            .writes("color", resources.texDeferColor, BlendMode.NONE)
+            .writes("normal", resources.texDeferNormal, BlendMode.NONE)
+            .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
+            .writes("data", resources.texDeferData, BlendMode.NONE);
 
         // pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/basic", "BasicShader")
         //     .writes("color", mainTexture)
@@ -78,7 +85,14 @@ public class main implements ShaderPack {
                 .dispatch2D(sizeX_16, sizeY_16);
 
             diffuseFlipper.flip();
-                
+                         
+            stage.compute("Deferred-Specular", "program/deferred/specular", "main")
+                .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
+                .dispatch2D(sizeX_16, sizeY_16);
+
+            specularFlipper.flip();
+   
+
             // TODO: blur
 
             if (pipeline.settings().getBoolValue("Accumulation")) {
@@ -92,6 +106,7 @@ public class main implements ShaderPack {
 
             stage.compute("OpaqueDeferred", "program/deferred/opaque", "main")
                 .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
+                .overrideObject("texSpecular_read", specularFlipper.getReader().name())
                 .overrideObject("texMain_write", mainFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
             
@@ -164,6 +179,11 @@ public class main implements ShaderPack {
 
         rendererConfig.setSunPathRotation(settings.getFloatValue("SunAngle"));
     }
+
+    @Override
+	public int setBlockId(IBlockState block) {
+		return blocks.getId(block);
+	}
 
     private void withStage(PipelineConfig pipeline, ProgramStage programStage, Consumer<StageList> callback) {
         callback.accept(pipeline.stage(programStage));
