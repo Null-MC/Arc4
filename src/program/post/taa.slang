@@ -1,4 +1,5 @@
 import aperture;
+import settings;
 import lib.common;
 
 extern static const float TAA_RejectionStrength = 0.1;
@@ -12,12 +13,12 @@ static const uint sharedBufferSize = sharedBufferResX*sharedBufferResY;
 groupshared half3 sharedBuffer[sharedBufferSize];
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> texMain_write;
+RWTexture2D<float3> texMain_write;
 
 Texture2D<half3> texMain_read;
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half4> texTaaHistory_write;
+RWTexture2D<float4> texTaaHistory_write;
 
 Texture2D<half4> texTaaHistory_read;
 
@@ -91,7 +92,11 @@ void main(ComputeInput input) {
 
         half4 lastColor = texTaaHistory_read.Sample(apt_linearSampler, uv_prev);
 
-        half mixRate = half(TAA_MaxAccumFrames);//clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
+        float mixRate = TAA_MaxAccumFrames;//clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
+        if (userSettings.Accumulation) {
+            mixRate = clamp(lastColor.a, 0.0, 666.0);
+            if (!all(ap.camera.position == ap.temporal.position) || !all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) mixRate = 0.0;
+        }
         if (!all(saturate(uv_prev) == uv_prev)) mixRate = 0.0h;
 
         int2 luv = input.localPos + 1;
@@ -107,13 +112,16 @@ void main(ComputeInput input) {
             color_max = max(color_max, in1);
         }
 
-        half3 colorFinal = lerp(lastColor.rgb, in0, 1.0h / (mixRate + 1.0h));
+        float3 colorFinal = lerp(lastColor.rgb, in0, 1.0 / ++mixRate);
 
         if (ap.timing.frameCounter == 0) colorFinal = in0;
         
-        colorFinal = clamp(colorFinal, color_min, color_max);
+        if (!userSettings.Accumulation)
+            colorFinal = clamp(colorFinal, color_min, color_max);
+
+        colorFinal = clamp(colorFinal, 0.0, half.maxValue);
         
         texMain_write[input.globalPos.xy] = colorFinal;
-        texTaaHistory_write[input.globalPos.xy] = half4(colorFinal, (half)(mixRate + 1.0));
+        texTaaHistory_write[input.globalPos.xy] = float4(colorFinal, mixRate);
     }
 }
