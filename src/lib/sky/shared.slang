@@ -10,8 +10,8 @@ static const bool planetSurfaceEnabled = true;
 
 static const float Sky_MinLight = 0.0;//0.08;
 
-static const float3 SunColor = 2000.0;// * pow(float3(1.0, 0.95, 0.9), 2.2);
-static const float3 MoonColor = 0.2;// * pow(float3(0.5, 0.5, 0.55), 2.2);
+static const float3 SunColor = 2000.0;// * transformer.fromGamma(1.0);
+static const float3 MoonColor = 0.2;// * transformer.fromGamma(1.0);
 
 
 extension PlanetBuffer {
@@ -41,6 +41,8 @@ extension PlanetBuffer {
         float3 skyPos_KM = localPos * 0.001;
         float cameraAltitude_KM = (ap.camera.position.y - userSettings.SeaLevel) * 0.001;
         skyPos_KM.y += cameraAltitude_KM + RadiusGround_KM;
+
+        skyPos_KM.y = max(skyPos_KM.y, RadiusGround_KM + 0.002);
 
         return skyPos_KM;
     }

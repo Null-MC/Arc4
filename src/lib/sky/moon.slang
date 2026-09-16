@@ -12,5 +12,5 @@ float skySphere(const in float3 rayDir, const in float3 lightDir, const in float
 }
 
 float renderMoon(float3 rayDir, float3 moonDir) {
-    return skySphere(rayDir, moonDir, moon_SizeRadians);
+    return skySphere(rayDir, moonDir, moon_SizeRadians) * 20.0;
 }

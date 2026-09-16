@@ -1,8 +1,7 @@
 import aperture;
-import object_shader;
 import settings;
-
-// import helpers.shadows;
+import object_shader;
+import lib.common;
 
 
 struct VertexData {
@@ -35,7 +34,7 @@ struct BasicShader : Shader<VertexData, FragmentData> {
 
         ap.discardCutout(color);
 
-        color.rgb = pow(color.rgb, half3(2.2));
+        color.rgb = transformer.fromGamma(color.rgb);
 
         // if (userSettings.shadows) {
         //     color.rgb *= lerp(0.35, 1.0, shadowVisibility(input.pos));

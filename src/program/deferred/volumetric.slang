@@ -11,7 +11,7 @@ static const int VL_NearSampleCount = 8;
 static const int VL_FarSampleCount = 8;
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> texMain_write;
+RWTexture2D<float3> texMain_write;
 
 Texture2D<half3> texMain_read;
 
@@ -35,8 +35,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 localViewDir = localPos / viewDist;
 
     float3 skyPos = planet.getSkyPosition(0.0);
-
-    skyPos.y = max(skyPos.y, planet.RadiusGround_KM + 0.002);
 
     float traceDistance_KM = planet.rayIntersectsAtmosphere(skyPos, localViewDir);
 
@@ -142,9 +140,11 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
     }
 
-    half3 color = texMain_read[globalPos];
+    float3 color = texMain_read[globalPos];
 
-    color = half3(color * transmittance + scattering);
+    color = color * transmittance + scattering;
+
+    color = clamp(color, 0.0, half.maxValue);
 
     texMain_write[globalPos] = color;
 }

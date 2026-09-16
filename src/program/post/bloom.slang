@@ -38,7 +38,7 @@ float3 bloomDown(float2 fragPos : SV_Position) : SV_Target0 {
     color += (b+d+f+h) * 0.06250;
     color += (j+k+l+m) * 0.12500;
 
-    color = clamp(color, 0.0, 65000.0);
+    color = clamp(color, 0.0, half.maxValue);
     return color;
 }
 
@@ -72,6 +72,6 @@ float3 bloomUp(float2 fragPos : SV_Position) : SV_Target0 {
     // replacement for no HW additive blending
     color += tex_write.Load(int3(int2(fragPos), mip_write));
 
-    color = clamp(color, 0.0, 65000.0);
+    color = clamp(color, 0.0, half.maxValue);
     return color;
 }

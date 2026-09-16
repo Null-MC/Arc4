@@ -1,6 +1,7 @@
 import aperture;
 import settings;
 import lib.common;
+import lib.color_transformer;
 import lib.noise.bayer;
 
 import lib.sky.transmit;
@@ -42,17 +43,10 @@ float3 main(float2 fragPos: SV_Position) {
             float meter = saturate(unmix(userSettings.Exposure_Min, userSettings.Exposure_Max, log2(exposure[0].average)));
             if (abs(texcoord.x - meter) < (4.0/ap.game.screenSize.x))
                 color.r = 1.0 - color.r;
-
-            // float shit2 = saturate(unmix(settings.Exposure_Min, settings.Exposure_Max, log2(Scene_AvgExposure) + Post_ExposureOffset));
-            // if (abs(previewCoord.x - shit2) < 0.008)
-            //     color.b = 1.0 - color.b;
         }
     }
 
-    // texcoord = fragPos / ap.game.screenSize;
-    // color = texBloom.SampleLevel(apt_linearSampler, texcoord, 1) * 0.004;
-
-    color = pow(saturate(color), (1.0/2.2));
+    color = linearToSrgb(color);
 
     const float ditherScale = rcp(255.0);
     color += GetBayerValue(uv) * ditherScale;

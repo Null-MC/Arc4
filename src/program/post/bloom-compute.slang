@@ -132,6 +132,6 @@ half3 applyBloomUp(float2 pos : SV_Position) : SV_Target0 {
         color = fma(color, settings.Bloom_Strength, texSource[int2(pos)]);
     }
 
-    color = clamp(color, 0.0, 65000.0);
+    color = clamp(color, 0.0, half.maxValue);
     return half3(color);
 }

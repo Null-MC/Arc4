@@ -99,7 +99,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         color_now = lerp(color_last.rgb, color_now, blendF);
     }
 
-    color_now = clamp(color_now, 0.0, 65000.0);
+    color_now = clamp(color_now, 0.0, half.maxValue);
     
     texDiffuse_write[globalPos] = color_now;
     texDiffuseHistory_write[globalPos] = float4(color_now, counter);

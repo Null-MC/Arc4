@@ -88,7 +88,7 @@ void compute(uint index : SV_GroupIndex) {
 		if (ap.timing.frameCounter > 0) {
 			float timeF = 1.0 - exp(-max(Exposure_Speed * ap.timing.lastFrameTime, 1.0e-12));
 
-			float lumLastFrame = clamp(exposure[0].average, 0.0, 65000.0);
+			float lumLastFrame = clamp(exposure[0].average, 0.0, half.maxValue);
 			adaptedLum = lumLastFrame + (weightedAvgLum - lumLastFrame) * timeF;
 		}
 

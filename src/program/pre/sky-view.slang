@@ -78,9 +78,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 skyPos = planet.getSkyPosition(0.0);
 
-    // ensure view is above planet
-    skyPos.y = max(skyPos.y, planet.RadiusGround_KM + 0.002);
-
     float3 rayDir, sunDir;
     HillaireSky::fromViewCoord(texcoord, planet, skyPos, rayDir, sunDir);
     

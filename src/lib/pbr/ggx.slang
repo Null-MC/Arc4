@@ -3,6 +3,12 @@ public module GGX;
 import lib.common;
 
 
+float ggxG1(const in float NoX, const in float alpha) {
+    float alphaSquared = alpha * alpha;
+    float denominator = NoX + sqrt(alphaSquared + (1.0 - alphaSquared) * NoX * NoX);
+    return 2.0 * NoX / max(denominator, 1e-5);
+}
+
 float3 sampleGGXVNDF(
     const in float3 viewDir,
     const in float3 normal,

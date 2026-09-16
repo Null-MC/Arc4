@@ -35,7 +35,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     if (depth > 0.0) {
         color = texDeferColor[globalPos];
-        float3 albedo = pow(color.rgb, 2.2);
+        float3 albedo = transformer.fromGamma(color.rgb);
 
         if (userSettings.Debug_WhiteWorld) albedo = 1.0;
 
@@ -46,7 +46,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (f0 == 0.0) f0 = 0.04;
 
         float metalness = step(0.9, f0);
-        float smoothness = pow2(specularMap.r);
+        float smoothness = specularMap.r;
         diffuse *= 1.0 - smoothness * metalness;
 
         diffuse *= rcp(PI);
@@ -81,17 +81,18 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 sunLight = renderSun(localViewDir, sunDir) * SunColor;
             // half3 sunTransmit = planet.sampleTransmit(skyPos, sunDir);
-            color.rgb += half3(sunLight * 20.0);// * sunTransmit;
+            color.rgb += sunLight;// * sunTransmit;
 
             float3 moonLight = renderMoon(localViewDir, moonDir) * MoonColor;
             // half3 moonTransmit = planet.sampleTransmit(skyPos, moonDir);
-            color.rgb += half3(moonLight * 20.0);// * moonTransmit;
+            color.rgb += moonLight;// * moonTransmit;
         }
 
-        color.rgb *= planet.sampleTransmit(skyPos, localViewDir);
+        float3 transmit = planet.sampleTransmit(skyPos, localViewDir);
+        color.rgb *= transformer.fromLinear(transmit);
     }
 
-    color.rgb = clamp(color.rgb, 0.0, 65000.0);
+    color.rgb = clamp(color.rgb, 0.0, half.maxValue);
 
     texMain_write[globalPos] = color.rgb;
 }

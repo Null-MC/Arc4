@@ -92,7 +92,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float traceDist = DDA::trace(hit_localNormal, localPos + 0.02 * geo_normal, rayDir, userSettings.MaxTraceSteps);
         if (traceDist < 0.0) {
             // sky
-            diffuse.rgb += PI * planet.sampleView(skyPos, rayDir, sunDir);
+            float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+            diffuse.rgb += PI * transformer.fromLinear(skyColor);
         }
         else {
             // hit

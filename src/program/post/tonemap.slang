@@ -1,4 +1,5 @@
 import aperture;
+import lib.common;
 import lib.exposure;
 
 
@@ -15,6 +16,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     color = max(color, 0.0);
     color /= max(exposure[0].average, 1e-8);
+
+    color = transformer.toLinear(color);
 
     color = aces_fit_tonemap(color);
 

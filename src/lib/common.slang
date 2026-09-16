@@ -1,11 +1,16 @@
 public module common;
 
 import aperture;
+import lib.color_transformer;
+import lib.aces;
 
 
 static const float PI = 3.1415926535897932384626433832795;
 
 static const float3 WaterAbsorb = 1.0 - pow(float3(0.427, 0.827, 0.949), 2.2);
+
+// static const ColorTransformer transformer = new sRGB_Transformer();
+static const ColorTransformer transformer = new ACES_Transformer();
 
 
 float luminance(const in float3 color) {
@@ -77,5 +82,6 @@ float3 fakeTexture(const in float3 localPos) {
 
     float3 f = floor(worldFract * 4.0);
     float checker = fmod(f.x + f.y + f.z, 2.0);
-    return lerp(color1, color2, checker);
+    float3 color = lerp(color1, color2, checker);
+    return transformer.fromLinear(color);
 }
