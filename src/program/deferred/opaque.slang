@@ -52,7 +52,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         diffuse *= rcp(PI);
 
         float emission = fract(specularMap.a);
-        diffuse += emission * 1200.0;
+        diffuse += pow2(emission) * 700.0;
 
         color.rgb = albedo * diffuse * color.a;
 
