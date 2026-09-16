@@ -1,7 +1,7 @@
 import aperture;
 import settings;
 import lib.common;
-import lib.ign;
+import lib.noise.ign;
 import lib.sky.shared;
 import lib.sky.transmit;
 
@@ -29,7 +29,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (planet.rayIntersectsGround(pos, sunDir) <= 0.0) {
         float atmoDist_KM = planet.rayIntersectsAtmosphere(pos, sunDir);
         
-        float dither = InterleavedGradientNoiseTime(globalPos);
+        float dither = IGN::getAnimated(globalPos);
         float stepSize = atmoDist_KM / sunTransmittanceSteps;
 
         float3 accumExtinction = 0.0;

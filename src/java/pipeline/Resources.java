@@ -36,6 +36,7 @@ public class Resources {
     public final MappedBuffer<SceneBuffer> bufferScene;
 
     public PingPongBuffer2D diffuseHistory;
+    public PingPongBuffer2D depthHistory;
     public PingPongBuffer2D taaHistory;
     
 
@@ -86,6 +87,10 @@ public class Resources {
             diffuseHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
                 .renderSize()
                 .createEmpty();
+            
+            depthHistory = new PingPongBufferBuilder2D(pipeline, "texDepthHistory", TextureFormat.R32_SFLOAT)
+                .renderSize()
+                .createEmpty();
         }
 
         mainTexture_A = pipeline.texture2D("mainTexture_A", TextureFormat.RGBA16_SFLOAT)
@@ -115,6 +120,7 @@ public class Resources {
         bufferScene.write(SceneBuffer.Build(state, screen));
         
         if (diffuseHistory != null) diffuseHistory.flip();
+        if (depthHistory != null) depthHistory.flip();
         if (taaHistory != null) taaHistory.flip();
     }
 }

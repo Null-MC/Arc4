@@ -89,7 +89,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         rayDir = transform_to_world(tex_normal, rayDir);
 
         float3 hit_localNormal;
-        float traceDist = DDA::trace(hit_localNormal, localPos + 0.02 * geo_normal, rayDir, MaxTraceSteps);
+        float traceDist = DDA::trace(hit_localNormal, localPos + 0.02 * geo_normal, rayDir, userSettings.MaxTraceSteps);
         if (traceDist < 0.0) {
             // sky
             diffuse.rgb += PI * planet.sampleView(skyPos, rayDir, sunDir);
@@ -110,7 +110,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 skyLightDir = normalize(ap.celestial.position);
 
             float3 shadow_normal;
-            float shadow_traceDist = DDA::trace(shadow_normal, hit_localPos + 0.02 * hit_localNormal, skyLightDir, MaxTraceSteps);
+            float shadow_traceDist = DDA::trace(shadow_normal, hit_localPos + 0.02 * hit_localNormal, skyLightDir, userSettings.MaxTraceSteps);
 
             if (shadow_traceDist >= 0.0) hit_diffuse = 0.0;
             else {

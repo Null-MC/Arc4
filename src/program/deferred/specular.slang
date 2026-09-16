@@ -8,6 +8,9 @@ import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.view;
+import lib.pbr.lazanyi;
+import lib.pbr.hcm;
+import lib.pbr.ggx;
 
 
 [[vk::image_format("rgba16f")]]
@@ -48,24 +51,21 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 viewDir = normalize(viewPos);
         float3 viewNormal = mul(float3x3(ap.camera.view), tex_normal);
 
-        // float dither = IGN::getAnimated(globalPos);
         float dither = BlueNoise::sampleAnimated1D(globalPos, 0, ap.timing.frameCounter);
 
-        // bool is_refract = dither > color.a;
-        float3 rayOrigin, rayViewDir;
-
-        // is_refract = true;
         half4 specularMap = texDeferSpecular[globalPos];
 
         float f0 = specularMap.g;
         if (f0 == 0.0) f0 = 0.04;
 
+        float3 albedo = pow(color.rgb, 2.2);
+
         float3 localViewDir = -normalize(localPos);
         float NoV = max(dot(tex_normal, localViewDir), 0.0);
-        float F = F_schlick(NoV, f0, 1.0);
+        float F_s = F_schlick(NoV, f0, 1.0);
+        bool is_reflect = F_s >= dither;
 
-        bool is_reflect = F >= dither;
-
+        float3 rayOrigin, rayViewDir;
         if (!is_reflect) {
             // refract
             float eta = ap.camera.fluid == 1
@@ -79,8 +79,20 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
 
         if (is_reflect) {
-            // reflect
-            rayViewDir = reflect(viewDir, viewNormal);
+            // Sample a visible GGX microfacet normal and reflect the incoming ray around it.
+            float roughness = max(1.0 - specularMap.r, 0.001);
+            float alpha = roughness * roughness;
+            float3 microfacetNormal = sampleGGXVNDF(
+                -viewDir,
+                viewNormal,
+                alpha,
+                BlueNoise::sampleAnimated2D(globalPos, 1, ap.timing.frameCounter)
+            );
+
+            rayViewDir = reflect(viewDir, microfacetNormal);
+            if (dot(rayViewDir, viewNormal) <= 0.0) {
+                rayViewDir = reflect(viewDir, viewNormal);
+            }
             rayOrigin = localPos + 0.02 * geo_normal;
         }
 
@@ -88,7 +100,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 sunDir = normalize(ap.celestial.sunPosition);
 
         float3 hit_localNormal;
-        float traceDist = DDA::trace(hit_localNormal, rayOrigin, rayDir, MaxTraceSteps);
+        float traceDist = DDA::trace(hit_localNormal, rayOrigin, rayDir, userSettings.MaxTraceSteps);
 
         if (traceDist < 0.0) {
             // sky
@@ -113,12 +125,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 skyLightDir = normalize(ap.celestial.position);
 
             float3 shadow_normal;
-            float shadow_traceDist = DDA::trace(shadow_normal, hit_localPos + 0.08 * hit_localNormal, skyLightDir, MaxTraceSteps);
+            float shadow_traceDist = DDA::trace(shadow_normal, hit_localPos + 0.08 * hit_localNormal, skyLightDir, userSettings.MaxTraceSteps);
 
             if (shadow_traceDist >= 0.0) hit_diffuse = 0.0;
             else {
                 // fallback to shadowmap
-                float3 hit_shadowViewPos = mul3(ap.celestial.view, hit_localPos);
+                float3 hit_shadowViewPos = mul3(ap.celestial.view, hit_localPos + 0.08 * hit_localNormal);
                 hit_shadowViewPos.z += 0.02;
                 
                 if (let result = getShadowCascade(hit_shadowViewPos)) {
@@ -132,7 +144,23 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             specular.rgb = hit_albedo * hit_diffuse;
         }
 
-        if (!is_reflect) {
+        if (is_reflect) {
+            int hcm = int(floor(f0 * 255.0 - 229.5));
+            float metalness = step(0.9, f0);
+
+            float3 F;
+            if (hcm >= 0 && hcm < 8) {
+                F = lazanyi_hcm[hcm].F(NoV);
+            }
+            else {
+                float3 _f0 = lerp(min(f0, 0.9), albedo, metalness);
+                F = LazanyiF(_f0, LazanyiF.f82_from_f0(_f0)).F(NoV);
+            }
+
+            float3 tint = lerp(1.0, albedo, metalness);
+            specular.rgb *= F * tint;
+        }
+        else {
             uint blockId = texDeferData[globalPos];
             if (blockId == 1) {
                 // water
@@ -142,13 +170,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             }
             else {
                 // everything else
-                float3 albedo = pow(color.rgb, 2.2);
                 specular.rgb *= albedo;
             }
 
             specular.rgb *= 1.0 - color.a;
         }
     }
+
+    specular = clamp(specular, 0.0, 65000.0);
 
     texSpecular_write[globalPos] = specular;
 }

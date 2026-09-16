@@ -26,7 +26,8 @@ namespace DDA {
     float trace(out float3 hit_normal, const in float3 localPos, const in float3 localDir, const in int maxStepCount) {
         float3 cameraFract = fract(ap.camera.position);
 
-        float3 stepSizes, nextDist, stepAxis;
+        float3 stepAxis = 0.0;
+        float3 stepSizes, nextDist;
         float3 currPos = localPos + cameraFract;
         DDA::init(stepSizes, nextDist, currPos, localDir);
 

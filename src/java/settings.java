@@ -13,6 +13,7 @@ public class settings implements PackSettings {
         screen.option("SeaLevel", OptionType.floatType(0.0f, 256.0f, 5.0f, 60.0f), true);
         screen.option("TAA_Enabled", OptionType.boolType(true), false);
         screen.option("Accumulation", OptionType.boolType(false), false);
+        screen.option("MaxTraceSteps", OptionType.intType(2, 128, 2, 32), false);
 
         subscreen(screen, "Shadows", screen_shadows -> {
             screen_shadows.option("Shadow_Resolution", OptionType.intType(new int[] {512, 1024, 2048, 4096}, 1024), false);

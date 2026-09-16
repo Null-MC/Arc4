@@ -1,7 +1,7 @@
 import aperture;
 import settings;
 import lib.common;
-import lib.bayer;
+import lib.noise.bayer;
 
 import lib.sky.transmit;
 import lib.sky.multiscatter;

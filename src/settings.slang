@@ -32,6 +32,7 @@ internal extern static const bool value_Bloom_Enabled;
 internal extern static const bool value_Debug_Exposure;
 internal extern static const bool value_Debug_SkyLuts;
 internal extern static const bool value_Debug_WhiteWorld;
+internal extern static const int value_MaxTraceSteps;
 internal extern static const int value_Shadow_Resolution;
 internal extern static const bool value_TAA_Enabled;
 
@@ -54,6 +55,7 @@ struct Settings {
     static const bool Debug_Exposure = value_Debug_Exposure;
     static const bool Debug_SkyLuts = value_Debug_SkyLuts;
     static const bool Debug_WhiteWorld = value_Debug_WhiteWorld;
+    static const int MaxTraceSteps = value_MaxTraceSteps;
     static const int Shadow_Resolution = value_Shadow_Resolution;
     static const bool TAA_Enabled = value_TAA_Enabled;
 };

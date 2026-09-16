@@ -5,8 +5,7 @@ import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.multiscatter;
 import lib.noise.blue;
-import lib.bayer;
-import lib.ign;
+import lib.noise.ign;
 
 
 extern static const int BufferWidth;
@@ -47,7 +46,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     for (int i = 0; i < sampleCount; i++) {
         float time = ap.timing.frameCounter + sampleCount * i;
-        float dither = InterleavedGradientNoiseTime(globalPos, time);
+        float dither = IGN::getAnimated(globalPos, time);
 
         float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, i, ap.timing.frameCounter);
         float3 rayDir = sampleCosineWeightedHemisphere(rayNoise);

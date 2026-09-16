@@ -8,7 +8,7 @@ import lib.sky.moon;
 
 
 [[vk::image_format("rgba16f")]]
-RWTexture2D<half3> texMain_write;
+RWTexture2D<float3> texMain_write;
 
 Texture2D<half4> texDeferColor;
 Texture2D<half4> texDeferSpecular;
@@ -22,7 +22,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (any(globalPos >= ap.game.renderSize)) return;
 
     float depth = ap.depth[globalPos];
-    half4 color;
+    float4 color;
 
     float2 texcoord = (globalPos + 0.5) / ap.game.screenSize;
 
@@ -35,23 +35,29 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     if (depth > 0.0) {
         color = texDeferColor[globalPos];
-        half3 albedo = pow(color.rgb, half3(2.2));
+        float3 albedo = pow(color.rgb, 2.2);
 
-        if (userSettings.Debug_WhiteWorld) albedo = 1.0h;
+        if (userSettings.Debug_WhiteWorld) albedo = 1.0;
 
-        half3 diffuse = texDiffuse_read[globalPos];
-        half4 specularMap = texDeferSpecular[globalPos];
+        float3 diffuse = texDiffuse_read[globalPos];
+        float4 specularMap = texDeferSpecular[globalPos];
 
-        diffuse *= rcp(half3(PI));
+        float f0 = specularMap.g;
+        if (f0 == 0.0) f0 = 0.04;
 
-        half emission = fract(specularMap.a);
-        diffuse += emission * 1200.0h;
+        float metalness = step(0.9, f0);
+        float smoothness = pow2(specularMap.r);
+        diffuse *= 1.0 - smoothness * metalness;
+
+        diffuse *= rcp(PI);
+
+        float emission = fract(specularMap.a);
+        diffuse += emission * 1200.0;
 
         color.rgb = albedo * diffuse * color.a;
 
         // TODO: add specular
-        half3 specular = texSpecular_read[globalPos];
-        float smoothness = pow2(specularMap.r);
+        float3 specular = texSpecular_read[globalPos];
         color.rgb += specular * smoothness;
 
         if (ap.camera.fluid == 1) {
@@ -84,6 +90,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         color.rgb *= planet.sampleTransmit(skyPos, localViewDir);
     }
+
+    color.rgb = clamp(color.rgb, 0.0, 65000.0);
 
     texMain_write[globalPos] = color.rgb;
 }

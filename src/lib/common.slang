@@ -5,7 +5,6 @@ import aperture;
 
 static const float PI = 3.1415926535897932384626433832795;
 
-static const int MaxTraceSteps = 32;
 static const float3 WaterAbsorb = 1.0 - pow(float3(0.427, 0.827, 0.949), 2.2);
 
 
@@ -35,15 +34,26 @@ T sumOf<T>(const in vector<T, 3> vec) where T: IArithmetic {
 }
 
 T pow2<T>(const in T value) where T: IArithmetic {
-    return value*value;
+    return value * value;
 }
 
 T pow3<T>(const in T value) where T: IArithmetic {
-    return value*value*value;
+    return value * value * value;
 }
 
 T pow5<T>(const in T value) where T: IArithmetic {
-    return value*value*value*value*value;
+    T value_2 = pow2(value);
+    return value_2 * value_2 * value;
+}
+
+T pow4<T>(const in T value) where T: IArithmetic {
+    T value_2 = pow2(value);
+    return value_2 * value_2;
+}
+
+T pow6<T>(const in T value) where T: IArithmetic {
+    T value_2 = pow2(value);
+    return value_2 * value_2 * value_2;
 }
 
 T unmix<T>(const in T valueMin, const in T valueMax, const in T value) where T: IFloat {
