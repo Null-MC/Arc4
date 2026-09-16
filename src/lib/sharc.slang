@@ -2,11 +2,12 @@ public module sharc;
 
 import aperture;
 
-static const uint SHARC_BUCKET_COUNT = 262144u;
+extern static const uint SHARC_BUCKET_COUNT;
 static const uint SHARC_PROBE_COUNT = 4u;
 static const uint SHARC_EMPTY_KEY = 0u;
 static const uint SHARC_TOMBSTONE_KEY = 0xffffffffu;
 static const float SHARC_CELL_SIZE = 1.0;
+static const float SHARC_SURFACE_OFFSET = 0.01;
 // Accumulation is 32-bit fixed point. Near-camera voxels receive many more
 // samples than distant voxels, so leave headroom for dense Minecraft geometry.
 static const float SHARC_RADIANCE_SCALE = 256.0;
@@ -16,9 +17,22 @@ static const uint SHARC_MIN_QUERY_SAMPLES = 32u;
 static const uint SHARC_MAX_HISTORY = 512u;
 static const uint SHARC_STALE_FRAME_MAX = 120u;
 
-struct SharcHashEntry { uint key; uint lock; };
-struct SharcAccumulationEntry { uint radianceR; uint radianceG; uint radianceB; uint samples; };
-struct SharcResolvedEntry { float3 radiance; float samples; };
+struct SharcHashEntry {
+    uint2 key;
+    float4 normalFrame;
+};
+
+struct SharcAccumulationEntry {
+    uint radianceR;
+    uint radianceG;
+    uint radianceB;
+    uint samples;
+};
+
+struct SharcResolvedEntry {
+    float3 radiance;
+    float samples;
+};
 
 RWStructuredBuffer<SharcHashEntry> sharcHashEntries;
 RWStructuredBuffer<SharcAccumulationEntry> sharcAccumulation;
@@ -40,11 +54,19 @@ uint sharcFace(const in float3 normal) {
     return normal.z >= 0.0 ? 4u : 5u;
 }
 
-uint sharcKey(const in int3 cell, const in float3 normal) {
+uint2 sharcKey(const in int3 cell, const in float3 normal) {
     uint face = sharcFace(normal);
-    uint key = sharcHash(asuint(cell) ^ (face * 0x9e3779b9u));
-    key |= 1u;
-    return key == SHARC_TOMBSTONE_KEY ? 0xfffffffdU : key;
+    uint3 mixedCell = asuint(cell) ^ (face * 0x9e3779b9u);
+    uint keyX = sharcHash(mixedCell) | 1u;
+    uint keyY = sharcHash(mixedCell.yzx + 0x85ebca6bu) | 1u;
+    if (keyX == SHARC_TOMBSTONE_KEY) keyX = 0xfffffffdU;
+    return uint2(keyX, keyY);
+}
+
+int3 sharcCell(const in float3 worldPos, const in float3 normal) {
+    // Surface positions lie on block boundaries. Select the solid block side
+    // consistently for both cache writes and reads.
+    return int3(floor((worldPos - normal * SHARC_SURFACE_OFFSET) / SHARC_CELL_SIZE));
 }
 
 uint sharcIndex(const in uint key, const in uint probe) {
@@ -52,45 +74,74 @@ uint sharcIndex(const in uint key, const in uint probe) {
     return (key + probe * step) & (SHARC_BUCKET_COUNT - 1u);
 }
 
-uint sharcFind(const in uint key) {
+bool sharcNormalMatches(const in float3 cachedNormal, const in float3 normal) {
+    return dot(cachedNormal, normal) >= 0.9;
+}
+
+uint sharcFind(const in uint2 key, const in float3 normal) {
     for (uint probe = 0u; probe < SHARC_PROBE_COUNT; probe++) {
-        uint index = sharcIndex(key, probe);
-        if (sharcHashEntries[index].key == key) return index;
+        uint index = sharcIndex(key.x, probe);
+        if (all(sharcHashEntries[index].key == key) &&
+            sharcNormalMatches(sharcHashEntries[index].normalFrame.xyz, normal)) return index;
     }
     return SHARC_BUCKET_COUNT;
 }
 
-uint sharcAcquire(const in uint key) {
+uint sharcAcquire(const in uint2 key, const in float3 normal) {
     uint tombstone = SHARC_BUCKET_COUNT;
+    uint empty = SHARC_BUCKET_COUNT;
 
     for (uint probe = 0u; probe < SHARC_PROBE_COUNT; probe++) {
-        uint index = sharcIndex(key, probe);
-        uint currentKey = sharcHashEntries[index].key;
+        uint index = sharcIndex(key.x, probe);
+        uint currentKey = sharcHashEntries[index].key.x;
+
+        if (currentKey == key.x && sharcHashEntries[index].key.y == key.y &&
+            sharcNormalMatches(sharcHashEntries[index].normalFrame.xyz, normal)) {
+            sharcHashEntries[index].normalFrame.w = ap.timing.frameCounter;
+            return index;
+        }
 
         if (currentKey == SHARC_TOMBSTONE_KEY && tombstone == SHARC_BUCKET_COUNT) {
             tombstone = index;
             continue;
         }
 
-        uint observed;
-        InterlockedCompareExchange(sharcHashEntries[index].key, SHARC_EMPTY_KEY, key, observed);
-        if (observed == SHARC_EMPTY_KEY || observed == key) {
-            sharcHashEntries[index].lock = ap.timing.frameCounter;
-            return index;
-        }
+        if (currentKey == SHARC_EMPTY_KEY && empty == SHARC_BUCKET_COUNT) empty = index;
     }
 
     if (tombstone != SHARC_BUCKET_COUNT) {
         uint observed;
         InterlockedCompareExchange(
-            sharcHashEntries[tombstone].key,
+            sharcHashEntries[tombstone].key.x,
             SHARC_TOMBSTONE_KEY,
-            key,
+            key.x,
             observed
         );
         if (observed == SHARC_TOMBSTONE_KEY) {
-            sharcHashEntries[tombstone].lock = ap.timing.frameCounter;
+            sharcAccumulation[tombstone].radianceR = 0u;
+            sharcAccumulation[tombstone].radianceG = 0u;
+            sharcAccumulation[tombstone].radianceB = 0u;
+            sharcAccumulation[tombstone].samples = 0u;
+            sharcResolved[tombstone].radiance = 0.0;
+            sharcResolved[tombstone].samples = 0.0;
+            sharcHashEntries[tombstone].key.y = key.y;
+            sharcHashEntries[tombstone].normalFrame = float4(normal, ap.timing.frameCounter);
             return tombstone;
+        }
+    }
+
+    if (empty != SHARC_BUCKET_COUNT) {
+        uint observed;
+        InterlockedCompareExchange(
+            sharcHashEntries[empty].key.x,
+            SHARC_EMPTY_KEY,
+            key.x,
+            observed
+        );
+        if (observed == SHARC_EMPTY_KEY) {
+            sharcHashEntries[empty].key.y = key.y;
+            sharcHashEntries[empty].normalFrame = float4(normal, ap.timing.frameCounter);
+            return empty;
         }
     }
 
@@ -123,8 +174,8 @@ void sharcAccumulate(
 ) {
     if (weight <= 0.0) return;
 
-    uint key = sharcKey(int3(floor(worldPos / SHARC_CELL_SIZE)), normal);
-    uint index = sharcAcquire(key);
+    uint2 key = sharcKey(sharcCell(worldPos, normal), normal);
+    uint index = sharcAcquire(key, normal);
     if (index == SHARC_BUCKET_COUNT) return;
     if (!sharcReserveSample(index)) return;
 
@@ -132,14 +183,15 @@ void sharcAccumulate(
         min(max(radiance, 0.0), SHARC_MAX_ACCUMULATED_RADIANCE) *
         weight * SHARC_RADIANCE_SCALE
     );
+
     InterlockedAdd(sharcAccumulation[index].radianceR, value.x);
     InterlockedAdd(sharcAccumulation[index].radianceG, value.y);
     InterlockedAdd(sharcAccumulation[index].radianceB, value.z);
 }
 
 float3 sharcLookup(const in float3 worldPos, const in float3 normal, out float confidence) {
-    uint key = sharcKey(int3(floor(worldPos / SHARC_CELL_SIZE)), normal);
-    uint index = sharcFind(key);
+    uint2 key = sharcKey(sharcCell(worldPos, normal), normal);
+    uint index = sharcFind(key, normal);
     if (index == SHARC_BUCKET_COUNT) {
         confidence = 0.0;
         return 0.0;
@@ -152,6 +204,7 @@ float3 sharcLookup(const in float3 worldPos, const in float3 normal, out float c
         float(SHARC_MAX_HISTORY),
         sampleCount
     );
+
     return entry.radiance;
 }
 
@@ -164,7 +217,7 @@ struct SharcDebugSample {
 };
 
 SharcDebugSample sharcDebugSample(const in float3 worldPos, const in float3 normal) {
-    uint key = sharcKey(int3(floor(worldPos / SHARC_CELL_SIZE)), normal);
+    uint2 key = sharcKey(sharcCell(worldPos, normal), normal);
     uint occupied = 0u;
     SharcDebugSample result;
     result.occupancy = 0.0;
@@ -174,11 +227,12 @@ SharcDebugSample sharcDebugSample(const in float3 worldPos, const in float3 norm
     result.matched = false;
 
     for (uint probe = 0u; probe < SHARC_PROBE_COUNT; probe++) {
-        uint index = sharcIndex(key, probe);
-        bool isOccupied = sharcHashEntries[index].key != SHARC_EMPTY_KEY &&
-            sharcHashEntries[index].key != SHARC_TOMBSTONE_KEY;
+        uint index = sharcIndex(key.x, probe);
+        bool isOccupied = sharcHashEntries[index].key.x != SHARC_EMPTY_KEY &&
+            sharcHashEntries[index].key.x != SHARC_TOMBSTONE_KEY;
         occupied += isOccupied ? 1u : 0u;
-        if (sharcHashEntries[index].key == key) {
+        if (all(sharcHashEntries[index].key == key) &&
+            sharcNormalMatches(sharcHashEntries[index].normalFrame.xyz, normal)) {
             SharcResolvedEntry entry = sharcResolved[index];
             if (entry.samples > 0.0) {
                 result.matched = true;

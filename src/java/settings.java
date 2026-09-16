@@ -11,13 +11,17 @@ public class settings implements PackSettings {
 	public void createSettings(SettingsManager manager, SettingsScreen screen) {
         screen.option("SunAngle", OptionType.floatType(-90.0f, 90.0f, 2.0f, 2.0f), true);
         screen.option("SeaLevel", OptionType.floatType(0.0f, 256.0f, 5.0f, 60.0f), true);
-        screen.option("TAA_Enabled", OptionType.boolType(true), false);
-        screen.option("SHARC_Enabled", OptionType.boolType(true), true);
-        screen.option("Accumulation", OptionType.boolType(false), false);
         screen.option("MaxTraceSteps", OptionType.intType(2, 128, 2, 32), false);
+        screen.option("TAA_Enabled", OptionType.boolType(true), false);
+        screen.option("Accumulation", OptionType.boolType(false), false);
 
         subscreen(screen, "Shadows", screen_shadows -> {
             screen_shadows.option("Shadow_Resolution", OptionType.intType(new int[] {512, 1024, 2048, 4096}, 1024), false);
+        });
+
+        subscreen(screen, "Sharc", screen_sharc -> {
+            screen_sharc.option("Sharc_Enabled", OptionType.boolType(true), true);
+            screen_sharc.option("Debug_SHARC", OptionType.boolType(false), true);
         });
 
         subscreen(screen, "Sky", screen_sky -> {
@@ -39,13 +43,12 @@ public class settings implements PackSettings {
             screen_exposure.option("Exposure_Min", OptionType.floatType(-6.0f, 0.0f, 0.2f, -3.0f), true);
             screen_exposure.option("Exposure_Max", OptionType.floatType(0.0f, 20.0f, 0.2f, 16.0f), true);
             screen_exposure.option("Exposure_Offset", OptionType.floatType(-2.0f, 6.0f, 0.2f, 3.4f), true);
+            screen_exposure.option("Debug_Exposure", OptionType.boolType(false), false);
         });
 
         subscreen(screen, "Debug", screen_debug -> {
             screen_debug.option("Debug_WhiteWorld", OptionType.boolType(false), false);
             screen_debug.option("Debug_SkyLuts", OptionType.boolType(false), false);
-            screen_debug.option("Debug_Exposure", OptionType.boolType(false), false);
-            screen_debug.option("Debug_SHARC", OptionType.boolType(false), true);
         });
     }
 

@@ -1,5 +1,7 @@
 package pipeline;
 
+import buffers.PlanetBuffer;
+import buffers.SkyBuffer;
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.AddressMode;
 import dev.irisshaders.aperture.api.objects.FilterMode;
@@ -53,6 +55,12 @@ public class HillaireSky {
             .minFilter(FilterMode.LINEAR)
             .magFilter(FilterMode.LINEAR)
             .create();
+
+        var bufferPlanet = pipeline.mappedBuffer("planet", PlanetBuffer.class);
+        bufferPlanet.write(PlanetBuffer.Earth);
+
+        var bufferSky = pipeline.mappedBuffer("sky", SkyBuffer.class);
+        bufferSky.write(SkyBuffer.Earth);
     }
 
     public void renderTransmit(StageList stage) {

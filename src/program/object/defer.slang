@@ -56,7 +56,7 @@ struct DeferShader : Shader<VertexData, FragmentData> {
         half4 color = half4(input.color);
 
         if (let texAlbedo = objectData.albedo()) {
-            color *= half4(texAlbedo.sampleTexture(input.uv));
+            color *= half4(texAlbedo.sampleBias(input.uv, -1.0));
         }
 
         ap.discardCutout(color);

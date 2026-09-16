@@ -34,7 +34,7 @@ float3 directLighting(const in float3 localPos, const in float3 normal) {
 [numthreads(16,16)]
 void main(uint2 globalPos : SV_DispatchThreadID) {
     if (any(globalPos >= ap.game.renderSize)) return;
-    if (!userSettings.SHARC_Enabled) return;
+    if (!userSettings.Sharc_Enabled) return;
 
     // Process a sparse, temporally distributed subset of primary pixels.
     uint sampleIndex = globalPos.x + globalPos.y * ap.game.renderSize.x;
@@ -54,24 +54,24 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 geoNormal = octohedral::decode(normalData.xy);
     float3 normal = octohedral::decode(normalData.zw);
 
-    localPos += 0.04 * geoNormal;
+    float3 rayOrigin = localPos + 0.04 * geoNormal;
     float3 worldPos = localPos + ap.camera.position;
 
-    sharcAccumulate(worldPos, normal, directLighting(localPos, normal), 1.0);
+    sharcAccumulate(worldPos, geoNormal, directLighting(localPos, normal), 1.0);
 
     float2 noise = BlueNoise::sampleAnimated2D(globalPos, 2, ap.timing.frameCounter);
     float3 rayDir = transform_to_world(normal, sampleCosineWeightedHemisphere(noise));
     float3 hitNormal;
-    float traceDist = DDA::trace(hitNormal, localPos, rayDir, userSettings.MaxTraceSteps);
+    float traceDist = DDA::trace(hitNormal, rayOrigin, rayDir, userSettings.MaxTraceSteps);
 
     if (traceDist < 0.0) {
         float3 skyPos = planet.getSkyPosition(localPos);
         float3 sky = planet.sampleView(skyPos, rayDir, normalize(ap.celestial.sunPosition));
-        sharcAccumulate(worldPos, normal, PI * transformer.fromLinear(sky), 1.0);
+        sharcAccumulate(worldPos, geoNormal, PI * transformer.fromLinear(sky), 1.0);
         return;
     }
 
-    float3 hitLocalPos = localPos + rayDir * traceDist;
+    float3 hitLocalPos = rayOrigin + rayDir * traceDist;
     float3 hitRadiance = directLighting(hitLocalPos, hitNormal);
     sharcAccumulate(hitLocalPos + ap.camera.position, hitNormal, hitRadiance, 1.0);
 }

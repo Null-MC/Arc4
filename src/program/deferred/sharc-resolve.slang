@@ -6,11 +6,11 @@ import lib.sharc;
 void main(uint index : SV_DispatchThreadID) {
     if (index >= SHARC_BUCKET_COUNT) return;
 
-    if (sharcHashEntries[index].key != SHARC_EMPTY_KEY &&
-        sharcHashEntries[index].key != SHARC_TOMBSTONE_KEY &&
-        ap.timing.frameCounter - sharcHashEntries[index].lock > SHARC_STALE_FRAME_MAX) {
-        sharcHashEntries[index].key = SHARC_TOMBSTONE_KEY;
-        sharcHashEntries[index].lock = 0u;
+    if (sharcHashEntries[index].key.x != SHARC_EMPTY_KEY &&
+        sharcHashEntries[index].key.x != SHARC_TOMBSTONE_KEY &&
+        ap.timing.frameCounter - sharcHashEntries[index].normalFrame.w > SHARC_STALE_FRAME_MAX) {
+        sharcHashEntries[index].key = uint2(SHARC_TOMBSTONE_KEY, SHARC_TOMBSTONE_KEY);
+        sharcHashEntries[index].normalFrame = 0.0;
         sharcResolved[index].radiance = 0.0;
         sharcResolved[index].samples = 0.0;
     }

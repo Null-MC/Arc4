@@ -57,7 +57,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float2 noise = BlueNoise::sampleAnimated2D(globalPos, 0, ap.timing.frameCounter);
         float3 rayDir = transform_to_world(normal, sampleCosineWeightedHemisphere(noise));
         float3 hitNormal;
-        float traceDist = DDA::trace(hitNormal, localPos + 0.02 * geoNormal, rayDir, userSettings.MaxTraceSteps);
+        float3 rayOrigin = localPos + 0.02 * geoNormal;
+        float traceDist = DDA::trace(hitNormal, rayOrigin, rayDir, userSettings.MaxTraceSteps);
 
         if (traceDist < 0.0) {
             float3 skyPos = planet.getSkyPosition(localPos);
@@ -65,13 +66,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             diffuse.rgb += PI * transformer.fromLinear(skyColor);
         }
         else {
-            float3 hitLocalPos = localPos + rayDir * traceDist;
-            hitLocalPos += 0.04 * geoNormal;
+            float3 hitLocalPos = rayOrigin + rayDir * traceDist;
 
             float3 hitDiffuse = directLighting(hitLocalPos, hitNormal);
             float3 hitWorldPos = hitLocalPos + ap.camera.position;
 
-            if (userSettings.SHARC_Enabled) {
+            if (userSettings.Sharc_Enabled) {
                 float confidence;
                 float3 cachedRadiance = sharcLookup(hitWorldPos, hitNormal, confidence);
                 // Keep a traced-lighting baseline while resolved SHARC history converges.

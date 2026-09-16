@@ -49,7 +49,7 @@ float3 main(float2 fragPos: SV_Position) {
     color = linearToSrgb(color);
 
     const float ditherScale = rcp(255.0);
-    color += GetBayerValue(uv) * ditherScale;
+    color += (GetBayerValue(uv) - 0.5) * ditherScale;
 
     return color;
 }

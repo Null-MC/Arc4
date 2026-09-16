@@ -12,6 +12,7 @@ import pipeline.Bloom;
 import pipeline.Exposure;
 import pipeline.HillaireSky;
 import pipeline.Resources;
+import pipeline.Sharc;
 import lib.Flipper;
 
 
@@ -22,6 +23,7 @@ public class main implements ShaderPack {
     private Exposure exposure;
     private Froxels froxels;
     private Bloom bloom;
+    private Sharc sharc;
     private Resources resources;
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
@@ -40,6 +42,7 @@ public class main implements ShaderPack {
         sky = new HillaireSky(pipeline);
         exposure = new Exposure(screen, pipeline);
         froxels = new Froxels(screen, pipeline);
+        sharc = new Sharc(screen, pipeline);
 
         if (pipeline.settings().getBoolValue("Bloom_Enabled")) {
             bloom = new Bloom(screen, pipeline);
@@ -80,28 +83,22 @@ public class main implements ShaderPack {
 
             froxels.render(stage);
             
-            stage.compute("SHARC-Clear", "program/deferred/sharc-clear", "main")
-                .dispatch1D(1024);
-
-            stage.compute("SHARC-Update", "program/deferred/sharc-update", "main")
-                .dispatch2D(sizeX_16, sizeY_16);
-
-            stage.compute("SHARC-Resolve", "program/deferred/sharc-resolve", "main")
-                .dispatch1D(1024);
+            sharc.render(stage);
 
             stage.compute("Deferred-Diffuse", "program/deferred/sharc-render", "main")
                 .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
+                .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
                 .dispatch2D(sizeX_16, sizeY_16);
 
             diffuseFlipper.flip();
                          
             stage.compute("Deferred-Specular", "program/deferred/specular", "main")
                 .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
+                .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
                 .dispatch2D(sizeX_16, sizeY_16);
 
             specularFlipper.flip();
    
-
             // TODO: blur
 
             // if (pipeline.settings().getBoolValue("Accumulation")) {
@@ -117,6 +114,7 @@ public class main implements ShaderPack {
                 .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
                 .overrideObject("texSpecular_read", specularFlipper.getReader().name())
                 .overrideObject("texMain_write", mainFlipper.getWriter().name())
+                .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
                 .dispatch2D(sizeX_16, sizeY_16);
             
             mainFlipper.flip();

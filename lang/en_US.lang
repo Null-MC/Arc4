@@ -11,6 +11,10 @@ screen.Shadows=Shadows
 option.Shadow_Resolution=Resolution
 suffix.Shadow_Resolution=x
 
+screen.Sharc=SHaRC
+option.Sharc_Enabled=Enabled
+option.Debug_SHARC=Debug
+
 screen.Sky=Sky
 option.Sky_BarometricPressure=Barometric Pressure
 option.Sky_FogIntensity=Fog Intensity

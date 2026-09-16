@@ -1,8 +1,6 @@
 package pipeline;
 
-import buffers.PlanetBuffer;
 import buffers.SceneBuffer;
-import buffers.SkyBuffer;
 
 import dev.irisshaders.aperture.api.objects.AddressMode;
 import dev.irisshaders.aperture.api.objects.FilterMode;
@@ -74,10 +72,6 @@ public class Resources {
             .renderSize()
             .create();
 
-        pipeline.buffer("sharcHashEntries", 262144 * 8);
-        pipeline.buffer("sharcAccumulation", 262144 * 16);
-        pipeline.buffer("sharcResolved", 262144 * 16);
-
         texSpecular_A = pipeline.texture2D("texSpecular_A", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
             .create();
@@ -86,15 +80,15 @@ public class Resources {
             .renderSize()
             .create();
 
-        if (pipeline.settings().getBoolValue("Accumulation")) {
-            diffuseHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
-                .renderSize()
-                .createEmpty();
+        // if (pipeline.settings().getBoolValue("Accumulation")) {
+        //     diffuseHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
+        //         .renderSize()
+        //         .createEmpty();
             
-            depthHistory = new PingPongBufferBuilder2D(pipeline, "texDepthHistory", TextureFormat.R32_SFLOAT)
-                .renderSize()
-                .createEmpty();
-        }
+        //     depthHistory = new PingPongBufferBuilder2D(pipeline, "texDepthHistory", TextureFormat.R32_SFLOAT)
+        //         .renderSize()
+        //         .createEmpty();
+        // }
 
         mainTexture_A = pipeline.texture2D("mainTexture_A", TextureFormat.RGBA16_SFLOAT)
             .windowSize()
@@ -105,18 +99,12 @@ public class Resources {
             .create();
 
         if (pipeline.settings().getBoolValue("TAA_Enabled")) {
-            taaHistory = new PingPongBufferBuilder2D(pipeline, "texTaaHistory", TextureFormat.RGBA16_SFLOAT)
+            taaHistory = new PingPongBufferBuilder2D(pipeline, "texTaaHistory", TextureFormat.RGBA32_SFLOAT)
                 .windowSize()
                 .createEmpty();
         }
 
         bufferScene = pipeline.mappedBuffer("scene", SceneBuffer.class);
-
-        var bufferPlanet = pipeline.mappedBuffer("planet", PlanetBuffer.class);
-        bufferPlanet.write(PlanetBuffer.Earth);
-
-        var bufferSky = pipeline.mappedBuffer("sky", SkyBuffer.class);
-        bufferSky.write(SkyBuffer.Earth);
     }
 
     public void update(FrameState state) {

@@ -142,8 +142,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                     hit_diffuse *= ap.opaqueShadow.compare(result.position.xy, result.cascade, result.position.z);
                 }
             }
-            
-            if (userSettings.SHARC_Enabled) {
+
+            if (userSettings.Sharc_Enabled) {
                 float sharcConfidence;
                 float3 sharcRadiance = sharcLookup(
                     hit_localPos + ap.camera.position,

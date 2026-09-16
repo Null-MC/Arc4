@@ -10,17 +10,17 @@ static const uint groupResY = 16;
 static const uint sharedBufferResX = groupResX+2;
 static const uint sharedBufferResY = groupResY+2;
 static const uint sharedBufferSize = sharedBufferResX*sharedBufferResY;
-groupshared half3 sharedBuffer[sharedBufferSize];
+groupshared float3 sharedBuffer[sharedBufferSize];
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float3> texMain_write;
 
-Texture2D<half3> texMain_read;
+Texture2D<float3> texMain_read;
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float4> texTaaHistory_write;
 
-Texture2D<half4> texTaaHistory_read;
+Texture2D<float4> texTaaHistory_read;
 
 
 uint2 getSharedUV(const in uint z) {
@@ -90,23 +90,23 @@ void main(ComputeInput input) {
         float3 clipPosLast = reproject(clipPos);
         float2 uv_prev = clipPosLast.xy * 0.5 + 0.5;
 
-        half4 lastColor = texTaaHistory_read.Sample(apt_linearSampler, uv_prev);
+        float4 lastColor = texTaaHistory_read.Sample(apt_linearSampler, uv_prev);
 
         float mixRate = TAA_MaxAccumFrames;//clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
         if (userSettings.Accumulation) {
             mixRate = clamp(lastColor.a, 0.0, 666.0);
             if (!all(ap.camera.position == ap.temporal.position) || !all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) mixRate = 0.0;
         }
-        if (!all(saturate(uv_prev) == uv_prev)) mixRate = 0.0h;
+        if (!all(saturate(uv_prev) == uv_prev)) mixRate = 0.0;
 
         int2 luv = input.localPos + 1;
-        half3 in0 = sharedBuffer[getSharedIndex(luv)];
+        float3 in0 = sharedBuffer[getSharedIndex(luv)];
 
-        half3 color_min = in0;
-        half3 color_max = in0;
+        float3 color_min = in0;
+        float3 color_max = in0;
 
         for (int i = 0; i < 8; i++) {
-            half3 in1 = sharedBuffer[getSharedIndex(luv + sample_offsets[i])];
+            float3 in1 = sharedBuffer[getSharedIndex(luv + sample_offsets[i])];
 
             color_min = min(color_min, in1);
             color_max = max(color_max, in1);
@@ -119,9 +119,10 @@ void main(ComputeInput input) {
         if (!userSettings.Accumulation)
             colorFinal = clamp(colorFinal, color_min, color_max);
 
+        texTaaHistory_write[input.globalPos.xy] = float4(colorFinal, mixRate);
+
         colorFinal = clamp(colorFinal, 0.0, half.maxValue);
         
         texMain_write[input.globalPos.xy] = colorFinal;
-        texTaaHistory_write[input.globalPos.xy] = float4(colorFinal, mixRate);
     }
 }

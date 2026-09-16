@@ -80,7 +80,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 trace_bufferPos = Froxel_GetBufferPosition(ndcPos);
         float3 froxel_uv = trace_bufferPos / Froxel_Resolution;
 
-        half3 inScattering = texFroxel_write.Sample(froxelSampler, froxel_uv).rgb;
+        float3 inScattering = texFroxel_write.Sample(froxelSampler, froxel_uv).rgb;
 
         // Integrated scattering within path segment.
         float3 scatteringIntegral = inScattering * ((1.0 - sampleTransmittance) / max(skySample.extinction, 1e-5));

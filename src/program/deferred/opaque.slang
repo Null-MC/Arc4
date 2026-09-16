@@ -67,10 +67,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             color.rgb *= exp(-viewDist * WaterAbsorb);
         }
 
-        if (userSettings.Debug_SHARC && userSettings.SHARC_Enabled) {
+        if (userSettings.Debug_SHARC && userSettings.Sharc_Enabled) {
             float3 geo_normal = octohedral::decode(texDeferNormal[globalPos].xy);
             float3 localPos = mul3(ap.camera.viewInv, viewPos);
-            localPos += 0.04 * geo_normal;
 
             float3 worldPos = localPos + ap.camera.position;
             SharcDebugSample sample = sharcDebugSample(worldPos, geo_normal);

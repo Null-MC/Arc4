@@ -42,8 +42,8 @@ struct Settings {
     float Exposure_Max;
     float Exposure_Min;
     float Exposure_Offset;
-    bool SHARC_Enabled;
     float SeaLevel;
+    bool Sharc_Enabled;
     float Sky_BarometricPressure;
     float Sky_FogIntensity;
     float Sky_Humidity;
