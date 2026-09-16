@@ -80,7 +80,16 @@ public class main implements ShaderPack {
 
             froxels.render(stage);
             
-            stage.compute("Deferred-Diffuse", "program/deferred/diffuse", "main")
+            stage.compute("SHARC-Clear", "program/deferred/sharc-clear", "main")
+                .dispatch1D(1024);
+
+            stage.compute("SHARC-Update", "program/deferred/sharc-update", "main")
+                .dispatch2D(sizeX_16, sizeY_16);
+
+            stage.compute("SHARC-Resolve", "program/deferred/sharc-resolve", "main")
+                .dispatch1D(1024);
+
+            stage.compute("Deferred-Diffuse", "program/deferred/sharc-render", "main")
                 .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
 

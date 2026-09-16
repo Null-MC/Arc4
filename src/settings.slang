@@ -38,9 +38,11 @@ internal extern static const bool value_TAA_Enabled;
 
 struct Settings {
     float Bloom_Strength;
+    bool Debug_SHARC;
     float Exposure_Max;
     float Exposure_Min;
     float Exposure_Offset;
+    bool SHARC_Enabled;
     float SeaLevel;
     float Sky_BarometricPressure;
     float Sky_FogIntensity;

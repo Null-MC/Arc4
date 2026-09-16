@@ -26,7 +26,6 @@ public class Resources {
 
     public final Texture2D texDiffuse_A;
     public final Texture2D texDiffuse_B;
-
     public final Texture2D texSpecular_A;
     public final Texture2D texSpecular_B;
 
@@ -74,6 +73,10 @@ public class Resources {
         texDiffuse_B = pipeline.texture2D("texDiffuse_B", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
             .create();
+
+        pipeline.buffer("sharcHashEntries", 262144 * 8);
+        pipeline.buffer("sharcAccumulation", 262144 * 16);
+        pipeline.buffer("sharcResolved", 262144 * 16);
 
         texSpecular_A = pipeline.texture2D("texSpecular_A", TextureFormat.RGBA16_SFLOAT)
             .renderSize()

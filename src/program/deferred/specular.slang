@@ -4,6 +4,7 @@ import lib.common;
 import lib.dda;
 import lib.octohedral;
 import lib.shadows;
+import lib.sharc;
 import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
@@ -142,6 +143,20 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 }
             }
             
+            if (userSettings.SHARC_Enabled) {
+                float sharcConfidence;
+                float3 sharcRadiance = sharcLookup(
+                    hit_localPos + ap.camera.position,
+                    hit_localNormal,
+                    sharcConfidence
+                );
+
+                // SHARC stores diffuse irradiance, so use it as a stable replacement
+                // for the direct hit lighting instead of adding it a second time.
+                float sharcWeight = sharcConfidence * 0.75;
+                hit_diffuse = lerp(hit_diffuse, sharcRadiance, sharcWeight);
+            }
+
             // fake albedo since no texture data
             float3 hit_albedo = fakeTexture(hit_localPos);
 

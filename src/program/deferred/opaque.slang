@@ -5,16 +5,18 @@ import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.sun;
 import lib.sky.moon;
+import lib.octohedral;
+import lib.sharc;
 
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float3> texMain_write;
 
 Texture2D<half4> texDeferColor;
+Texture2D<half4> texDeferNormal;
 Texture2D<half4> texDeferSpecular;
 Texture2D<half3> texDiffuse_read;
 Texture2D<half3> texSpecular_read;
-
 
 [[shader("compute")]]
 [numthreads(16,16)]
@@ -63,6 +65,31 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (ap.camera.fluid == 1) {
             float viewDist = length(viewPos);
             color.rgb *= exp(-viewDist * WaterAbsorb);
+        }
+
+        if (userSettings.Debug_SHARC && userSettings.SHARC_Enabled) {
+            float3 geo_normal = octohedral::decode(texDeferNormal[globalPos].xy);
+            float3 localPos = mul3(ap.camera.viewInv, viewPos);
+            localPos += 0.04 * geo_normal;
+
+            float3 worldPos = localPos + ap.camera.position;
+            SharcDebugSample sample = sharcDebugSample(worldPos, geo_normal);
+            float3 occupancyColor = lerp(
+                float3(0.01, 0.01, 0.02),
+                float3(0.08, 0.8, 0.16),
+                sample.occupancy
+            );
+            occupancyColor = lerp(occupancyColor, float3(1.0, 0.12, 0.02), sample.collisions);
+
+            if (sample.matched) {
+                float confidence = sample.confidence;
+                float3 radianceColor = max(sample.radiance, 0.05);
+                color.rgb = lerp(occupancyColor, radianceColor, 0.7);
+                color.rgb *= lerp(0.35, 1.5, confidence);
+            }
+            else {
+                color.rgb = occupancyColor;
+            }
         }
     }
     else {

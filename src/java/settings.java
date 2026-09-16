@@ -12,6 +12,7 @@ public class settings implements PackSettings {
         screen.option("SunAngle", OptionType.floatType(-90.0f, 90.0f, 2.0f, 2.0f), true);
         screen.option("SeaLevel", OptionType.floatType(0.0f, 256.0f, 5.0f, 60.0f), true);
         screen.option("TAA_Enabled", OptionType.boolType(true), false);
+        screen.option("SHARC_Enabled", OptionType.boolType(true), true);
         screen.option("Accumulation", OptionType.boolType(false), false);
         screen.option("MaxTraceSteps", OptionType.intType(2, 128, 2, 32), false);
 
@@ -44,6 +45,7 @@ public class settings implements PackSettings {
             screen_debug.option("Debug_WhiteWorld", OptionType.boolType(false), false);
             screen_debug.option("Debug_SkyLuts", OptionType.boolType(false), false);
             screen_debug.option("Debug_Exposure", OptionType.boolType(false), false);
+            screen_debug.option("Debug_SHARC", OptionType.boolType(false), true);
         });
     }
 

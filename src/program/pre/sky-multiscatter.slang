@@ -1,6 +1,7 @@
 import aperture;
 import settings;
 import lib.common;
+import lib.hemisphere;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.multiscatter;
@@ -24,12 +25,6 @@ RWTexture2D<half3> texSkyMultiScatter;
 //     float sinTheta = sin(theta);
 //     return float3(sinPhi*sinTheta, cosPhi, sinPhi*cosTheta);
 // }
-
-float3 sampleCosineWeightedHemisphere(const in float2 u) {
-    float r = sqrt(u.x);
-    float theta = (2.0 * PI) * u.y;
-    return float3(r * cos(theta), r * sin(theta), sqrt(max(0.0, 1.0 - u.x)));
-}
 
 
 [[shader("compute")]]
