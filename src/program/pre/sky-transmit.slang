@@ -12,8 +12,7 @@ extern static const int BufferHeight;
 static const half historyBlendF = rcp(24.h);
 static const int sunTransmittanceSteps = 20;
 
-[[vk::image_format("rgba16f")]]
-RWTexture2D<half3> texSkyTransmit;
+RWTexture2D<float3> texSkyTransmit;
 
 
 [[shader("compute")]]
@@ -50,7 +49,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     half3 color_new = half3(saturate(transmittance));
 
-    half3 color = texSkyTransmit[globalPos];
+    float3 color = texSkyTransmit[globalPos];
     color = ap.timing.frameCounter < 1 ? color_new : lerp(color, color_new, half3(historyBlendF));
     texSkyTransmit[globalPos] = color;
 }
