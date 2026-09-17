@@ -1,11 +1,11 @@
 import aperture;
 import settings;
+import rt_pipeline;
 import lib.common;
-import lib.dda;
 import lib.hemisphere;
 import lib.octohedral;
-import lib.shadows;
 import lib.sharc;
+import lib.shadow;
 import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
@@ -16,21 +16,6 @@ import lib.sky.view;
 RWTexture2D<float4> texDiffuse_write;
 
 Texture2D<half4> texDeferNormal;
-
-float3 directLighting(const in float3 localPos, const in float3 normal) {
-    float3 skyPos = planet.getSkyPosition(localPos);
-    float3 sunDir = normalize(ap.celestial.sunPosition);
-    float3 moonDir = normalize(ap.celestial.moonPosition);
-    float3 result = planet.sampleTransmit(skyPos, sunDir) * SunColor * max(dot(normal, sunDir), 0.0);
-    result += planet.sampleTransmit(skyPos, moonDir) * MoonColor * max(dot(normal, moonDir), 0.0);
-
-    float3 shadowViewPos = mul3(ap.celestial.view, localPos);
-    shadowViewPos.z += 0.02;
-    if (let cascade = getShadowCascade(shadowViewPos)) {
-        result *= ap.opaqueShadow.compare(cascade.position.xy, cascade.cascade, cascade.position.z);
-    }
-    return result;
-}
 
 
 [[shader("compute")]]
@@ -50,39 +35,92 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (depth > 0.0) {
         diffuse.a = 1.0;
         half4 normalData = texDeferNormal[globalPos];
-        float3 geoNormal = octohedral::decode(normalData.xy);
-        float3 normal = octohedral::decode(normalData.zw);
-        diffuse.rgb = directLighting(localPos, normal);
+        float3 geo_normal = octohedral::decode(normalData.xy);
+        float3 tex_normal = octohedral::decode(normalData.zw);
+
+        float3 sunDir = normalize(ap.celestial.sunPosition);
+        float3 moonDir = normalize(ap.celestial.moonPosition);
+        float3 skyLightDir = normalize(ap.celestial.position);
+
+        float3 skyPos = planet.getSkyPosition(localPos);
+        float3 directLight = planet.sampleTransmit(skyPos, sunDir) * SunColor * max(dot(tex_normal, sunDir), 0.0);
+        directLight += planet.sampleTransmit(skyPos, moonDir) * MoonColor * max(dot(tex_normal, moonDir), 0.0);
+
+        diffuse.rgb = directLight * SampleShadowDisc(globalPos, localPos, geo_normal);
+
+        // diffuse.rgb = directLighting(localPos, geo_normal, tex_normal);
 
         float2 noise = BlueNoise::sampleAnimated2D(globalPos, 0, ap.timing.frameCounter);
-        float3 rayDir = transform_to_world(normal, sampleCosineWeightedHemisphere(noise));
-        float3 hitNormal;
-        float3 rayOrigin = localPos + 0.02 * geoNormal;
-        float traceDist = DDA::trace(hitNormal, rayOrigin, rayDir, userSettings.MaxTraceSteps);
+        float3 rayDir = transform_to_world(tex_normal, sampleCosineWeightedHemisphere(noise));
 
-        if (traceDist < 0.0) {
+        var query = HWRT.startQuery(
+            localPos,
+            rayDir,
+            0.002,
+            max(ap.world.renderDistance, 1.0),
+            HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+            HWRT.RTFlags.NONE);
+        
+        while (query.proceed()) {
+            let hit = query.getCandidate();
+            if (hit.getHitType() == HWRT.HitType.TERRAIN && hit.getGeometryIndex() == HWRT.RTGeometryIndex.TRANSLUCENT) continue;
+            
+            let surface = HWRT.decodeHit(hit);
+            float alpha = surface.albedo().sampleLevel(surface.getUV(), 0.0).a;// * surface.getColor().a;
+            if (alpha >= 0.1) query.acceptCandidate();
+        }
+
+        if (!query.hasHit()) {
             float3 skyPos = planet.getSkyPosition(localPos);
             float3 skyColor = planet.sampleView(skyPos, rayDir, normalize(ap.celestial.sunPosition));
             diffuse.rgb += PI * transformer.fromLinear(skyColor);
         }
         else {
-            float3 hitLocalPos = rayOrigin + rayDir * traceDist;
+            var hit = query.getHit();
+            var surface = HWRT.decodeHit(hit);
+            float3 hit_localPos = surface.getPos();
+            float3 hit_localNormal = surface.getNormal();
 
-            float3 hitDiffuse = directLighting(hitLocalPos, hitNormal);
-            float3 hitWorldPos = hitLocalPos + ap.camera.position;
+            // float3 hitDiffuse = directLighting(hit_localPos, hit_localNormal, hit_localNormal);
+            float3 sunDir = normalize(ap.celestial.sunPosition);
+            float3 moonDir = normalize(ap.celestial.moonPosition);
+            float3 skyLightDir = normalize(ap.celestial.position);
 
-            if (userSettings.Sharc_Enabled) {
-                float confidence;
-                float3 cachedRadiance = sharcLookup(hitWorldPos, hitNormal, confidence);
-                // Keep a traced-lighting baseline while resolved SHARC history converges.
-                float cacheWeight = confidence * 0.75;
-                hitDiffuse = lerp(hitDiffuse, cachedRadiance, cacheWeight);
-            }
+            float3 skyPos = planet.getSkyPosition(localPos);
+            float3 hitDiffuse = planet.sampleTransmit(skyPos, sunDir) * SunColor * max(dot(tex_normal, sunDir), 0.0);
+            hitDiffuse += planet.sampleTransmit(skyPos, moonDir) * MoonColor * max(dot(tex_normal, moonDir), 0.0);
 
-            diffuse.rgb += fakeTexture(hitLocalPos) * hitDiffuse;
+            hitDiffuse *= SampleShadow(localPos, geo_normal);
+
+            // float3 hit_albedo = surface.albedo().sampleLevel(surface.getUV(), 0.0).rgb * surface.getColor().rgb;
+            // hitDiffuse *= transformer.fromGamma(hit_albedo);
+
+            float3 hitWorldPos = hit_localPos + ap.camera.position;
+
+            float confidence;
+            float3 cachedRadiance = sharcLookup(hitWorldPos, hit_localNormal, confidence);
+            // Keep a traced-lighting baseline while resolved SHARC history converges.
+            float cacheWeight = confidence * 0.75;
+            hitDiffuse = lerp(hitDiffuse, cachedRadiance, cacheWeight);
+
+            float3 hit_albedo = surface.albedo().sampleLevel(surface.getUV(), 0.0).rgb * surface.getColor().rgb;
+            diffuse.rgb += hitDiffuse * transformer.fromGamma(hit_albedo);
         }
     }
 
     diffuse.rgb = clamp(diffuse.rgb, 0.0, half.maxValue);
     texDiffuse_write[globalPos] = diffuse;
 }
+
+
+// float3 directLighting(const in float3 localPos, const in float3 geo_normal, const in float3 tex_normal) {
+//     float3 sunDir = normalize(ap.celestial.sunPosition);
+//     float3 moonDir = normalize(ap.celestial.moonPosition);
+//     float3 skyLightDir = normalize(ap.celestial.position);
+
+//     float3 skyPos = planet.getSkyPosition(localPos);
+//     float3 result = planet.sampleTransmit(skyPos, sunDir) * SunColor * max(dot(tex_normal, sunDir), 0.0);
+//     result += planet.sampleTransmit(skyPos, moonDir) * MoonColor * max(dot(tex_normal, moonDir), 0.0);
+
+//     return result * SampleShadow(localPos, geo_normal);
+// }

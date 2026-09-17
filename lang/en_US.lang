@@ -7,19 +7,19 @@ suffix.SeaLevel=m
 option.TAA_Enabled=TAA
 option.Accumulation=Accumulation
 
-screen.Shadows=Shadows
-option.Shadow_Resolution=Resolution
-suffix.Shadow_Resolution=x
-
 screen.Sharc=SHaRC
 option.Sharc_Enabled=Enabled
 option.Debug_SHARC=Debug
 
 screen.Sky=Sky
+option.Sky_SunRadius=Sun Radius
 option.Sky_BarometricPressure=Barometric Pressure
 option.Sky_FogIntensity=Fog Intensity
 option.Sky_Humidity=Humidity
 option.Sky_Turbidity=Turbidity
+option.Sky_PollutionColor_R=Pollution Red
+option.Sky_PollutionColor_G=Pollution Green
+option.Sky_PollutionColor_B=Pollution Blue
 
 screen.Bloom=Bloom
 option.Bloom_Enabled=Enabled
@@ -30,8 +30,8 @@ screen.Exposure=Exposure
 option.Exposure_Min=Min
 option.Exposure_Max=Max
 option.Exposure_Offset=Shift
+option.Debug_Exposure=Debug
 
 screen.Debug=Debug
 option.Debug_WhiteWorld=White-World
 option.Debug_SkyLuts=Sky LUTs
-option.Debug_Exposure=Exposure

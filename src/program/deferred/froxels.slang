@@ -1,11 +1,11 @@
 import aperture;
 import settings;
+import rt_pipeline;
 import lib.common;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.multiscatter;
 import lib.noise.hash;
-import lib.shadows;
 import lib.froxel;
 
 
@@ -43,27 +43,21 @@ void main(ComputeInput input) {
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
     float3 localDir = normalize(localPos);
 
-    float dither = hash13(seed);
+    float3 skyLightDir = normalize(ap.celestial.position);
+    float shadowF = SampleShadow(localPos, skyLightDir);
 
-    float3 sunDir = normalize(ap.celestial.sunPosition);
-    float3 moonDir = normalize(ap.celestial.moonPosition);
+    float dither = hash13(seed);
 
     float3 skyPos = planet.getSkyPosition(localPos);
 
-    float3 shadowViewPos = mul3(ap.celestial.view, localPos);
-
-    float shadowF = 1.0;
-    if (let result = getShadowCascade(shadowViewPos)) {
-        shadowF = ap.opaqueShadow.compare(result.position.xy, result.cascade, result.position.z);
-    }
-
+    float3 sunDir = normalize(ap.celestial.sunPosition);
     float VoL_sun = dot(localDir, sunDir);
     float miePhase_sun = getMiePhase(VoL_sun);
 
+    float3 moonDir = normalize(ap.celestial.moonPosition);
     float VoL_moon = dot(localDir, moonDir);
     float miePhase_moon = getMiePhase(VoL_moon);
 
-    float3 skyLightDir = normalize(ap.celestial.position);
     float atmoDist = planet.rayIntersectsAtmosphere(skyPos, skyLightDir);
     // TODO: use min of ground dist?
     float stepDist = atmoDist / Froxel_SkyLight_StepCount;
@@ -124,4 +118,28 @@ void main(ComputeInput input) {
     half3 final = lerp(froxelPrev.rgb, half3(scattering), rcp(counter));
 
     texFroxel_write[input.globalPos] = half4(final, counter);
+}
+
+
+float SampleShadow(const in float3 localPos, const in float3 skyLightDir) {
+    var query = HWRT.startQuery(
+        localPos,
+        skyLightDir,
+        0.002,
+        max(ap.world.renderDistance, 1.0),
+        HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+        HWRT.RTFlags.ACCEPT_FIRST_HIT_AND_END_SEARCH);
+    
+    while (query.proceed()) {
+        let hit = query.getCandidate();
+        if (hit.getHitType() == HWRT.HitType.TERRAIN && hit.getGeometryIndex() == HWRT.RTGeometryIndex.TRANSLUCENT) continue;
+        
+        var hit_surface = HWRT.decodeHit(hit);
+        float2 hit_uv = hit_surface.getUV();
+
+        float alpha = hit_surface.albedo().sampleLevel(hit_uv, 0.0).a * hit_surface.getColor().a;
+        if (alpha >= 0.1) query.acceptCandidate();
+    }
+
+    return query.hasHit() ? 0.0 : 1.0;
 }

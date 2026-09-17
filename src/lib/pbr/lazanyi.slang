@@ -7,6 +7,7 @@ struct LazanyiF {
     float3 f0;
     float3 f82;
 
+    
     __init(float3 f0, float3 f82) {
         this.f0 = f0;
         this.f82 = f82;

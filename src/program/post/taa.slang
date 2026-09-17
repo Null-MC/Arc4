@@ -17,7 +17,7 @@ RWTexture2D<float3> texMain_write;
 
 Texture2D<float3> texMain_read;
 
-[[vk::image_format("rgba16f")]]
+[[vk::image_format("rgba32f")]]
 RWTexture2D<float4> texTaaHistory_write;
 
 Texture2D<float4> texTaaHistory_read;
@@ -95,7 +95,7 @@ void main(ComputeInput input) {
         float mixRate = TAA_MaxAccumFrames;//clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
         if (userSettings.Accumulation) {
             mixRate = clamp(lastColor.a, 0.0, 666.0);
-            if (!all(ap.camera.position == ap.temporal.position) || !all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) mixRate = 0.0;
+            if (!all(ap.camera.position == ap.temporal.position) || !all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) mixRate = min(mixRate, 8.0);
         }
         if (!all(saturate(uv_prev) == uv_prev)) mixRate = 0.0;
 

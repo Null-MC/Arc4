@@ -5,12 +5,20 @@ import buffers.SkyBuffer;
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.AddressMode;
 import dev.irisshaders.aperture.api.objects.FilterMode;
+import dev.irisshaders.aperture.api.objects.MappedBuffer;
 import dev.irisshaders.aperture.api.objects.Texture2D;
 import dev.irisshaders.aperture.api.objects.TextureFormat;
 import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
+import lib.PlanetData;
 
 
 public class HillaireSky {
+    public PlanetData Planet;
+    public SkyBuffer Sky;
+
+    private final MappedBuffer<PlanetBuffer> planetBuffer;
+    private final MappedBuffer<SkyBuffer> skyBuffer;
+
     public final int TransmitBufferWidth = 256;
     public final int TransmitBufferHeight = 64;
     public final Texture2D TransmitTexture;
@@ -25,7 +33,14 @@ public class HillaireSky {
 
 
     public HillaireSky(PipelineConfig pipeline) {
-        TransmitTexture = pipeline.texture2D("texSkyTransmit", TextureFormat.RGBA16_UNORM)
+        Planet = new PlanetData();
+        Planet.RadiusGround_KM = 3_360.f;
+        Planet.RadiusAtmosphere_KM = 3_460.f;
+        Planet.SunAngularRadius = 0.00931f;
+
+        Sky = SkyBuffer.Earth;
+
+        TransmitTexture = pipeline.texture2D("texSkyTransmit", TextureFormat.RGBA16_SFLOAT)
             .size(TransmitBufferWidth, TransmitBufferHeight)
             .create();
         
@@ -56,11 +71,13 @@ public class HillaireSky {
             .magFilter(FilterMode.LINEAR)
             .create();
 
-        var bufferPlanet = pipeline.mappedBuffer("planet", PlanetBuffer.class);
-        bufferPlanet.write(PlanetBuffer.Earth);
+        planetBuffer = pipeline.mappedBuffer("planet", PlanetBuffer.class);
+        skyBuffer = pipeline.mappedBuffer("sky", SkyBuffer.class);
+    }
 
-        var bufferSky = pipeline.mappedBuffer("sky", SkyBuffer.class);
-        bufferSky.write(SkyBuffer.Earth);
+    public void update() {
+        planetBuffer.write(Planet.ToBuffer());
+        skyBuffer.write(Sky);
     }
 
     public void renderTransmit(StageList stage) {

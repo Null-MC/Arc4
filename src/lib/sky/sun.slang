@@ -1,10 +1,7 @@
 public module sun;
 
+import settings;
 import lib.common;
-
-static const float sun_SizeRadians = 0.00931;
-// static const float sun_distanceMm = 149600.0;
-// static const float sun_radiusMm = 695.7;
 
 
 // float solidAngle(float dist, float rad) {
@@ -18,5 +15,5 @@ float skySphere(const in float3 rayDir, const in float3 lightDir, const in float
 }
 
 float renderSun(float3 rayDir, float3 sunDir) {
-    return skySphere(rayDir, sunDir, sun_SizeRadians) * 20.0;
+    return skySphere(rayDir, sunDir, planet.SunAngularRadius) * 20.0;
 }

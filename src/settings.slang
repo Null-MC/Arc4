@@ -15,6 +15,7 @@ ConstantBuffer<SkyBuffer, ScalarDataLayout> sky;
 struct PlanetBuffer {
     float RadiusGround_KM;
     float RadiusAtmosphere_KM;
+    float SunAngularRadius;
 };
 
 
@@ -27,38 +28,34 @@ struct SceneBuffer {
 
 ConstantBuffer<SceneBuffer, ScalarDataLayout> scene;
 
-internal extern static const bool value_Accumulation;
 internal extern static const bool value_Bloom_Enabled;
 internal extern static const bool value_Debug_Exposure;
 internal extern static const bool value_Debug_SkyLuts;
-internal extern static const bool value_Debug_WhiteWorld;
-internal extern static const int value_MaxTraceSteps;
-internal extern static const int value_Shadow_Resolution;
+internal extern static const bool value_Sharc_Enabled;
 internal extern static const bool value_TAA_Enabled;
 
 struct Settings {
+    bool Accumulation;
     float Bloom_Strength;
     bool Debug_SHARC;
+    bool Debug_WhiteWorld;
     float Exposure_Max;
     float Exposure_Min;
     float Exposure_Offset;
     float SeaLevel;
-    bool Sharc_Enabled;
     float Sky_BarometricPressure;
     float Sky_FogIntensity;
     float Sky_Humidity;
     float Sky_PollutionColor_B;
     float Sky_PollutionColor_G;
     float Sky_PollutionColor_R;
+    float Sky_SunRadius;
     float Sky_Turbidity;
     float SunAngle;
-    static const bool Accumulation = value_Accumulation;
     static const bool Bloom_Enabled = value_Bloom_Enabled;
     static const bool Debug_Exposure = value_Debug_Exposure;
     static const bool Debug_SkyLuts = value_Debug_SkyLuts;
-    static const bool Debug_WhiteWorld = value_Debug_WhiteWorld;
-    static const int MaxTraceSteps = value_MaxTraceSteps;
-    static const int Shadow_Resolution = value_Shadow_Resolution;
+    static const bool Sharc_Enabled = value_Sharc_Enabled;
     static const bool TAA_Enabled = value_TAA_Enabled;
 };
 

@@ -1,10 +1,10 @@
 import aperture;
 import settings;
+import rt_pipeline;
 import lib.common;
-import lib.dda;
-import lib.octohedral;
-import lib.shadows;
 import lib.sharc;
+import lib.shadow;
+import lib.octohedral;
 import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
@@ -67,7 +67,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float F_s = F_schlick(NoV, f0, 1.0);
         bool is_reflect = F_s >= dither;
 
-        float3 rayOrigin, rayViewDir;
+        float3 rayViewDir;
         float roughness = max(1.0 - specularMap.r, 0.001);
         float alpha = roughness * roughness;
         if (!is_reflect) {
@@ -76,7 +76,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 ? (1.333 / 1.0)
                 : (1.0 / 1.333);
 
-            rayOrigin = localPos + 0.02 * geo_normal;
             rayViewDir = refract(viewDir, viewNormal, eta);
 
             if (all(rayViewDir == 0.0)) is_reflect = true;
@@ -91,7 +90,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 BlueNoise::sampleAnimated2D(globalPos, 1, ap.timing.frameCounter)
             );
 
-            rayOrigin = localPos + 0.02 * geo_normal;
             rayViewDir = reflect(viewDir, microfacetNormal);
             if (dot(rayViewDir, viewNormal) <= 0.0) {
                 rayViewDir = reflect(viewDir, viewNormal);
@@ -101,10 +99,31 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 rayDir = mul(float3x3(ap.camera.viewInv), rayViewDir);
         float3 sunDir = normalize(ap.celestial.sunPosition);
 
-        float3 hit_localNormal;
-        float traceDist = DDA::trace(hit_localNormal, rayOrigin, rayDir, userSettings.MaxTraceSteps);
+        var query = HWRT.startQuery(
+            localPos,
+            rayDir,
+            0.002,
+            max(ap.world.renderDistance, 1.0),
+            HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+            HWRT.RTFlags.NONE);
+        
+        float3 transmitColor = 1.0;
+        while (query.proceed()) {
+            let hit = query.getCandidate();
+            if (hit.getHitType() == HWRT.HitType.TERRAIN && hit.getGeometryIndex() == HWRT.RTGeometryIndex.TRANSLUCENT) continue;
+            
+            let surface = HWRT.decodeHit(hit);
+            let hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0);// * surface.getColor();
+            if (hit_color.a >= 0.99) query.acceptCandidate();
+            else {
+                float3 tint = transformer.fromGamma(hit_color.rgb);
+                // tint = lerp(1.0, tint, hit_color.a);
+                transmitColor *= tint * (1.0 - pow2(hit_color.a));
+            }
+        }
 
-        if (traceDist < 0.0) {
+        float traceDist;
+        if (!query.hasHit()) {
             // sky
             float3 skyPos = planet.getSkyPosition(localPos);
 
@@ -112,10 +131,17 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             specular.rgb = transformer.fromLinear(skyColor);
 
             // specular.rgb += renderSun(rayDir, sunDir) * SunColor;
+            traceDist = ap.camera.far;
         }
         else {
             // hit
-            float3 hit_localPos = localPos + rayDir * traceDist;
+            var hit = query.getHit();
+            var surface = HWRT.decodeHit(hit);
+            float3 hit_localPos = surface.getPos();
+            float3 hit_localNormal = surface.getNormal();
+
+            traceDist = distance(localPos, hit_localPos);
+
             float3 hit_skyPos = planet.getSkyPosition(hit_localPos);
 
             float3 sunLight = planet.sampleTransmit(hit_skyPos, sunDir);
@@ -126,22 +152,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             moonLight *= MoonColor * max(dot(hit_localNormal, moonDir), 0.0);
 
             float3 hit_diffuse = sunLight + moonLight;
-
-            float3 skyLightDir = normalize(ap.celestial.position);
-
-            float3 shadow_normal;
-            float shadow_traceDist = DDA::trace(shadow_normal, hit_localPos + 0.08 * hit_localNormal, skyLightDir, userSettings.MaxTraceSteps);
-
-            if (shadow_traceDist >= 0.0) hit_diffuse = 0.0;
-            else {
-                // fallback to shadowmap
-                float3 hit_shadowViewPos = mul3(ap.celestial.view, hit_localPos + 0.08 * hit_localNormal);
-                hit_shadowViewPos.z += 0.02;
-                
-                if (let result = getShadowCascade(hit_shadowViewPos)) {
-                    hit_diffuse *= ap.opaqueShadow.compare(result.position.xy, result.cascade, result.position.z);
-                }
-            }
+            hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
 
             if (userSettings.Sharc_Enabled) {
                 float sharcConfidence;
@@ -157,37 +168,40 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 hit_diffuse = lerp(hit_diffuse, sharcRadiance, sharcWeight);
             }
 
-            // fake albedo since no texture data
-            float3 hit_albedo = fakeTexture(hit_localPos);
-
-            specular.rgb = hit_albedo * hit_diffuse;
+            float3 hit_albedo = surface.albedo().sampleLevel(surface.getUV(), 0.0).rgb * surface.getColor().rgb;
+            specular.rgb = hit_diffuse * transformer.fromGamma(hit_albedo);
         }
+
+        specular.rgb *= transmitColor;
 
         if (is_reflect) {
             int hcm = int(floor(f0 * 255.0 - 229.5));
             float metalness = step(0.9, f0);
 
-            float3 F;
-            if (hcm >= 0 && hcm < 8) {
-                F = lazanyi_hcm[hcm].F(NoV);
-            }
-            else {
-                float3 _f0 = lerp(min(f0, 0.9), albedo, metalness);
-                F = LazanyiF(_f0, LazanyiF.f82_from_f0(_f0)).F(NoV);
-            }
+            float3 halfDir = normalize(localViewDir + sunDir);
+            float VoH = max(dot(localViewDir, halfDir), 0.0);
 
-            specular.rgb *= F;
+            float3 F_NoV, F_VoH;
+            var L = (hcm >= 0 && hcm < 8)
+                ? lazanyi_hcm[hcm]
+                : LazanyiF(lerp(f0, albedo, metalness));
+
+            F_NoV = L.F(NoV);
+            F_VoH = L.F(VoH);
+            
+            specular.rgb *= F_NoV;
 
             specular.rgb += sampleDirectSun(
                 localPos,
+                geo_normal,
                 tex_normal,
                 localViewDir,
                 sunDir,
-                geo_normal,
                 alpha,
-                f0,
-                albedo,
-                metalness
+                // f0,
+                F_VoH,
+                // albedo,
+                // metalness
             ) * SunColor;
 
             // albedo tinting
@@ -222,43 +236,34 @@ float F_schlick(const in float cos_theta, const in float f0, const in float f90)
 
 float3 sampleDirectSun(
     const in float3 localPos,
-    const in float3 normal,
+    const in float3 geo_normal,
+    const in float3 tex_normal,
     const in float3 viewDir,
     const in float3 sunDir,
-    const in float3 geoNormal,
     const in float alpha,
-    const in float f0,
-    const in float3 albedo,
-    const in float metalness
+    // const in float f0,
+    const in float3 F_VoH,
+    // const in float metalness
 ) {
-    float NoV = max(dot(normal, viewDir), 0.0);
-    float NoL = max(dot(normal, sunDir), 0.0);
+    float NoV = max(dot(tex_normal, viewDir), 0.0);
+    float NoL = max(dot(tex_normal, sunDir), 0.0);
     if (NoV <= 0.0 || NoL <= 0.0) return 0.0;
 
     float3 halfDir = normalize(viewDir + sunDir);
-    float NoH = max(dot(normal, halfDir), 0.0);
-    float VoH = max(dot(viewDir, halfDir), 0.0);
+    float NoH = max(dot(tex_normal, halfDir), 0.0);
+    // float VoH = max(dot(viewDir, halfDir), 0.0);
 
     float alphaSquared = alpha * alpha;
     float denominator = NoH * NoH * (alphaSquared - 1.0) + 1.0;
     float D = alphaSquared / max(PI * denominator * denominator, 1e-5);
     float G = ggxG1(NoV, alpha) * ggxG1(NoL, alpha);
 
-    float3 f0Color = lerp(f0, albedo, metalness);
-    float3 F = f0Color + (1.0 - f0Color) * pow5(1.0 - VoH);
-    float3 brdf = F * D * G / max(4.0 * NoV * NoL, 1e-5);
+    // float3 f0Color = lerp(f0, albedo, metalness);
+    // float3 F = f0Color + (1.0 - f0Color) * pow5(1.0 - VoH);
+    float3 brdf = F_VoH * D * G / max(4.0 * NoV * NoL, 1e-5);
 
-    float3 sunOrigin = localPos + 0.02 * geoNormal;
-    float3 shadowNormal;
-    float shadowDistance = DDA::trace(shadowNormal, sunOrigin, sunDir, userSettings.MaxTraceSteps);
-    if (shadowDistance >= 0.0) return 0.0;
-
-    float shadow = 1.0;
-    float3 shadowViewPos = mul3(ap.celestial.view, sunOrigin);
-    shadowViewPos.z += 0.02;
-    if (let result = getShadowCascade(shadowViewPos)) {
-        shadow = ap.opaqueShadow.compare(result.position.xy, result.cascade, result.position.z);
-    }
+    float3 shadow = SampleShadow(localPos, geo_normal);
+    // if (shadow == 0.0) return 0.0;
 
     const float sunHalfAngle = 0.00931;
     const float sunSolidAngle = PI * sunHalfAngle * sunHalfAngle;

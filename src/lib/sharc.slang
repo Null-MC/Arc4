@@ -3,10 +3,15 @@ public module sharc;
 import aperture;
 
 extern static const uint SHARC_BUCKET_COUNT;
+static const uint SHARC_CASCADE_COUNT = 4u;
+static const uint SHARC_BUCKETS_PER_CASCADE = SHARC_BUCKET_COUNT / SHARC_CASCADE_COUNT;
 static const uint SHARC_PROBE_COUNT = 4u;
 static const uint SHARC_EMPTY_KEY = 0u;
 static const uint SHARC_TOMBSTONE_KEY = 0xffffffffu;
-static const float SHARC_CELL_SIZE = 1.0;
+static const float SHARC_CELL_SIZE = 0.25;
+static const float SHARC_CASCADE_DISTANCE_0 = 16.0;
+static const float SHARC_CASCADE_DISTANCE_1 = 64.0;
+static const float SHARC_CASCADE_DISTANCE_2 = 256.0;
 static const float SHARC_SURFACE_OFFSET = 0.01;
 // Accumulation is 32-bit fixed point. Near-camera voxels receive many more
 // samples than distant voxels, so leave headroom for dense Minecraft geometry.
@@ -54,45 +59,70 @@ uint sharcFace(const in float3 normal) {
     return normal.z >= 0.0 ? 4u : 5u;
 }
 
-uint2 sharcKey(const in int3 cell, const in float3 normal) {
+uint sharcCascade(const in float3 worldPos) {
+    float distanceToCamera = distance(worldPos, ap.camera.position);
+    if (distanceToCamera < SHARC_CASCADE_DISTANCE_0) return 0u;
+    if (distanceToCamera < SHARC_CASCADE_DISTANCE_1) return 1u;
+    if (distanceToCamera < SHARC_CASCADE_DISTANCE_2) return 2u;
+    return 3u;
+}
+
+float sharcCellSize(const in uint cascade) {
+    return SHARC_CELL_SIZE * exp2(float(cascade));
+}
+
+float3 sharcCanonicalNormal(const in float3 normal) {
     uint face = sharcFace(normal);
-    uint3 mixedCell = asuint(cell) ^ (face * 0x9e3779b9u);
+    if (face == 0u) return float3(1.0, 0.0, 0.0);
+    if (face == 1u) return float3(-1.0, 0.0, 0.0);
+    if (face == 2u) return float3(0.0, 1.0, 0.0);
+    if (face == 3u) return float3(0.0, -1.0, 0.0);
+    if (face == 4u) return float3(0.0, 0.0, 1.0);
+    return float3(0.0, 0.0, -1.0);
+}
+
+uint2 sharcKey(const in int3 cell, const in float3 normal, const in uint cascade) {
+    uint face = sharcFace(normal);
+    uint3 mixedCell = asuint(cell) ^ (face * 0x9e3779b9u) ^ (cascade * 0x85ebca6bu);
     uint keyX = sharcHash(mixedCell) | 1u;
     uint keyY = sharcHash(mixedCell.yzx + 0x85ebca6bu) | 1u;
     if (keyX == SHARC_TOMBSTONE_KEY) keyX = 0xfffffffdU;
     return uint2(keyX, keyY);
 }
 
-int3 sharcCell(const in float3 worldPos, const in float3 normal) {
+int3 sharcCell(const in float3 worldPos, const in float3 normal, const in uint cascade) {
     // Surface positions lie on block boundaries. Select the solid block side
     // consistently for both cache writes and reads.
-    return int3(floor((worldPos - normal * SHARC_SURFACE_OFFSET) / SHARC_CELL_SIZE));
+    float3 canonicalNormal = sharcCanonicalNormal(normal);
+    return int3(floor((worldPos - canonicalNormal * SHARC_SURFACE_OFFSET) / sharcCellSize(cascade)));
 }
 
-uint sharcIndex(const in uint key, const in uint probe) {
+uint sharcIndex(const in uint key, const in uint probe, const in uint cascade) {
     uint step = ((key >> 16u) | 1u) * 2u + 1u;
-    return (key + probe * step) & (SHARC_BUCKET_COUNT - 1u);
+    uint localIndex = (key + probe * step) & (SHARC_BUCKETS_PER_CASCADE - 1u);
+    return cascade * SHARC_BUCKETS_PER_CASCADE + localIndex;
 }
 
 bool sharcNormalMatches(const in float3 cachedNormal, const in float3 normal) {
-    return dot(cachedNormal, normal) >= 0.9;
+    return all(cachedNormal == sharcCanonicalNormal(normal));
 }
 
-uint sharcFind(const in uint2 key, const in float3 normal) {
+uint sharcFind(const in uint2 key, const in float3 normal, const in uint cascade) {
     for (uint probe = 0u; probe < SHARC_PROBE_COUNT; probe++) {
-        uint index = sharcIndex(key.x, probe);
+        uint index = sharcIndex(key.x, probe, cascade);
         if (all(sharcHashEntries[index].key == key) &&
             sharcNormalMatches(sharcHashEntries[index].normalFrame.xyz, normal)) return index;
     }
     return SHARC_BUCKET_COUNT;
 }
 
-uint sharcAcquire(const in uint2 key, const in float3 normal) {
+uint sharcAcquire(const in uint2 key, const in float3 normal, const in uint cascade) {
+    float3 canonicalNormal = sharcCanonicalNormal(normal);
     uint tombstone = SHARC_BUCKET_COUNT;
     uint empty = SHARC_BUCKET_COUNT;
 
     for (uint probe = 0u; probe < SHARC_PROBE_COUNT; probe++) {
-        uint index = sharcIndex(key.x, probe);
+        uint index = sharcIndex(key.x, probe, cascade);
         uint currentKey = sharcHashEntries[index].key.x;
 
         if (currentKey == key.x && sharcHashEntries[index].key.y == key.y &&
@@ -125,7 +155,7 @@ uint sharcAcquire(const in uint2 key, const in float3 normal) {
             sharcResolved[tombstone].radiance = 0.0;
             sharcResolved[tombstone].samples = 0.0;
             sharcHashEntries[tombstone].key.y = key.y;
-            sharcHashEntries[tombstone].normalFrame = float4(normal, ap.timing.frameCounter);
+            sharcHashEntries[tombstone].normalFrame = float4(canonicalNormal, ap.timing.frameCounter);
             return tombstone;
         }
     }
@@ -140,7 +170,7 @@ uint sharcAcquire(const in uint2 key, const in float3 normal) {
         );
         if (observed == SHARC_EMPTY_KEY) {
             sharcHashEntries[empty].key.y = key.y;
-            sharcHashEntries[empty].normalFrame = float4(normal, ap.timing.frameCounter);
+            sharcHashEntries[empty].normalFrame = float4(canonicalNormal, ap.timing.frameCounter);
             return empty;
         }
     }
@@ -174,8 +204,9 @@ void sharcAccumulate(
 ) {
     if (weight <= 0.0) return;
 
-    uint2 key = sharcKey(sharcCell(worldPos, normal), normal);
-    uint index = sharcAcquire(key, normal);
+    uint cascade = sharcCascade(worldPos);
+    uint2 key = sharcKey(sharcCell(worldPos, normal, cascade), normal, cascade);
+    uint index = sharcAcquire(key, normal, cascade);
     if (index == SHARC_BUCKET_COUNT) return;
     if (!sharcReserveSample(index)) return;
 
@@ -190,8 +221,9 @@ void sharcAccumulate(
 }
 
 float3 sharcLookup(const in float3 worldPos, const in float3 normal, out float confidence) {
-    uint2 key = sharcKey(sharcCell(worldPos, normal), normal);
-    uint index = sharcFind(key, normal);
+    uint cascade = sharcCascade(worldPos);
+    uint2 key = sharcKey(sharcCell(worldPos, normal, cascade), normal, cascade);
+    uint index = sharcFind(key, normal, cascade);
     if (index == SHARC_BUCKET_COUNT) {
         confidence = 0.0;
         return 0.0;
@@ -217,7 +249,8 @@ struct SharcDebugSample {
 };
 
 SharcDebugSample sharcDebugSample(const in float3 worldPos, const in float3 normal) {
-    uint2 key = sharcKey(sharcCell(worldPos, normal), normal);
+    uint cascade = sharcCascade(worldPos);
+    uint2 key = sharcKey(sharcCell(worldPos, normal, cascade), normal, cascade);
     uint occupied = 0u;
     SharcDebugSample result;
     result.occupancy = 0.0;
@@ -227,7 +260,7 @@ SharcDebugSample sharcDebugSample(const in float3 worldPos, const in float3 norm
     result.matched = false;
 
     for (uint probe = 0u; probe < SHARC_PROBE_COUNT; probe++) {
-        uint index = sharcIndex(key.x, probe);
+        uint index = sharcIndex(key.x, probe, cascade);
         bool isOccupied = sharcHashEntries[index].key.x != SHARC_EMPTY_KEY &&
             sharcHashEntries[index].key.x != SHARC_TOMBSTONE_KEY;
         occupied += isOccupied ? 1u : 0u;

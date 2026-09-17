@@ -9,6 +9,7 @@ public class Sharc {
     private static final int MIN_BUCKET_COUNT = 1 << 16;
     private static final int MAX_BUCKET_COUNT = 1 << 20;
     private static final int PIXELS_PER_BUCKET = 8;
+    private static final int CASCADE_COUNT = 4;
     private static final int HASH_ENTRY_STRIDE_BYTES = 24;
     private static final int ACCUMULATION_ENTRY_STRIDE_BYTES = 16;
     private static final int RESOLVED_ENTRY_STRIDE_BYTES = 16;
@@ -23,8 +24,11 @@ public class Sharc {
         int pixelCount = screen.renderWidth() * screen.renderHeight();
         bucketCount = nextPowerOfTwo(clamp(
             (pixelCount + PIXELS_PER_BUCKET - 1) / PIXELS_PER_BUCKET,
-            MIN_BUCKET_COUNT,
+            Math.max(MIN_BUCKET_COUNT, CASCADE_COUNT),
             MAX_BUCKET_COUNT));
+        if (bucketCount % CASCADE_COUNT != 0) {
+            throw new IllegalStateException("SHARC bucket count must divide evenly across cascades");
+        }
 
         pipeline.buffer("sharcHashEntries", bucketCount * HASH_ENTRY_STRIDE_BYTES);
         pipeline.buffer("sharcAccumulation", bucketCount * ACCUMULATION_ENTRY_STRIDE_BYTES);

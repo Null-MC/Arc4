@@ -17,8 +17,6 @@ import lib.Flipper;
 
 
 public class main implements ShaderPack {
-    private static final int CASCADE_COUNT = 4;
-
     private HillaireSky sky;
     private Exposure exposure;
     private Froxels froxels;
@@ -33,6 +31,7 @@ public class main implements ShaderPack {
 
     @Override
 	public void configurePipeline(Screen screen, PipelineConfig pipeline) {
+        var settings = pipeline.settings();
         resources = new Resources(screen, pipeline);
 
         diffuseFlipper = new Flipper<Texture2D>(resources.texDiffuse_A, resources.texDiffuse_B);
@@ -42,9 +41,12 @@ public class main implements ShaderPack {
         sky = new HillaireSky(pipeline);
         exposure = new Exposure(screen, pipeline);
         froxels = new Froxels(screen, pipeline);
-        sharc = new Sharc(screen, pipeline);
 
-        if (pipeline.settings().getBoolValue("Bloom_Enabled")) {
+        // if (settings.getBoolValue("Sharc_Enabled")) {
+            sharc = new Sharc(screen, pipeline);
+        // }
+
+        if (settings.getBoolValue("Bloom_Enabled")) {
             bloom = new Bloom(screen, pipeline);
         }
 
@@ -54,8 +56,6 @@ public class main implements ShaderPack {
             sky.renderView(stage);
         });
         
-        pipeline.object(ProgramUsage.SHADOW, "program/object/shadow", "ShadowShader");
-
         pipeline.object(ProgramUsage.SKYBOX, "program/object/discard", "DiscardShader");
         pipeline.object(ProgramUsage.SKY_TEXTURES, "program/object/discard", "DiscardShader");
         pipeline.object(ProgramUsage.CLOUDS, "program/object/discard", "DiscardShader");
@@ -83,12 +83,19 @@ public class main implements ShaderPack {
 
             froxels.render(stage);
             
-            sharc.render(stage);
+            if (settings.getBoolValue("Sharc_Enabled")) {
+                sharc.render(stage);
 
-            stage.compute("Deferred-Diffuse", "program/deferred/sharc-render", "main")
-                .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
-                .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
-                .dispatch2D(sizeX_16, sizeY_16);
+                stage.compute("Deferred-SHaRC-Render", "program/deferred/sharc-render", "main")
+                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
+                    .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
+                    .dispatch2D(sizeX_16, sizeY_16);
+            }
+            else {
+                stage.compute("Deferred-Diffuse", "program/deferred/diffuse", "main")
+                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
+                    .dispatch2D(sizeX_16, sizeY_16);
+            }
 
             diffuseFlipper.flip();
                          
@@ -101,7 +108,7 @@ public class main implements ShaderPack {
    
             // TODO: blur
 
-            // if (pipeline.settings().getBoolValue("Accumulation")) {
+            // if (settings.getBoolValue("Accumulation")) {
             //     stage.compute("Accumulate-Diffuse", "program/deferred/accumulate", "main")
             //         .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
             //         .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
@@ -129,7 +136,7 @@ public class main implements ShaderPack {
 
             mainFlipper.flip();
 
-            if (pipeline.settings().getBoolValue("TAA_Enabled")) {
+            if (settings.getBoolValue("TAA_Enabled")) {
                 stage.compute("TAA", "program/post/taa", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
                     .overrideObject("texMain_write", mainFlipper.getWriter().name())
@@ -152,7 +159,7 @@ public class main implements ShaderPack {
 
             mainFlipper.flip();
 
-            if (pipeline.settings().getBoolValue("TAA_Enabled")) {
+            if (settings.getBoolValue("TAA_Enabled")) {
                 // TAA CAS Sharpening
                 stage.compute("Sharpen", "program/post/sharpen", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
@@ -169,22 +176,24 @@ public class main implements ShaderPack {
 
     @Override
 	public void configureRenderer(RendererConfig rendererConfig) {
-        var settings = rendererConfig.getSettings();
+        // var settings = rendererConfig.getSettings();
 
-        rendererConfig.setShadowCascades(CASCADE_COUNT);
-        rendererConfig.setShadowDistance(400.0f);
-        rendererConfig.setShadowResolution(settings.getIntValue("Shadow_Resolution"));
+        rendererConfig.enableRT();
+        // rendererConfig.setShadowCascades(0);
     }
 
     @Override
 	public void onNewFrame(FrameState state) {
-        resources.update(state);
-        froxels.update();
-
         var rendererConfig = state.getRendererConfig();
         var settings = rendererConfig.getSettings();
 
+        sky.Planet.SunAngularRadius = settings.getFloatValue("Sky_SunRadius");
+
         rendererConfig.setSunPathRotation(settings.getFloatValue("SunAngle"));
+
+        resources.update(state);
+        froxels.update();
+        sky.update();
     }
 
     @Override

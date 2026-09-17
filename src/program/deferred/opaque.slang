@@ -49,7 +49,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         float metalness = step(0.9, f0);
         float smoothness = specularMap.r;
-        diffuse *= 1.0 - smoothness * metalness;
+        diffuse *= 1.0 - metalness;
 
         diffuse *= rcp(PI);
 
