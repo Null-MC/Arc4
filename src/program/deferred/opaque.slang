@@ -1,6 +1,7 @@
 import aperture;
 import settings;
 import lib.common;
+import lib.pbr.material;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.sun;
@@ -53,8 +54,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         diffuse *= rcp(PI);
 
-        float emission = fract(specularMap.a);
-        diffuse += pow2(emission) * 700.0;
+        diffuse += mat_emission(specularMap.a);
 
         color.rgb = albedo * diffuse * color.a;
 

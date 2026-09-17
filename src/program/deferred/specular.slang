@@ -110,10 +110,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 transmitColor = 1.0;
         while (query.proceed()) {
             let hit = query.getCandidate();
-            if (hit.getHitType() == HWRT.HitType.TERRAIN && hit.getGeometryIndex() == HWRT.RTGeometryIndex.TRANSLUCENT) continue;
-            
             let surface = HWRT.decodeHit(hit);
             let hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0);// * surface.getColor();
+            
             if (hit_color.a >= 0.99) query.acceptCandidate();
             else {
                 float3 tint = transformer.fromGamma(hit_color.rgb);

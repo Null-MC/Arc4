@@ -132,8 +132,6 @@ float SampleShadow(const in float3 localPos, const in float3 skyLightDir) {
     
     while (query.proceed()) {
         let hit = query.getCandidate();
-        if (hit.getHitType() == HWRT.HitType.TERRAIN && hit.getGeometryIndex() == HWRT.RTGeometryIndex.TRANSLUCENT) continue;
-        
         var hit_surface = HWRT.decodeHit(hit);
         float2 hit_uv = hit_surface.getUV();
 

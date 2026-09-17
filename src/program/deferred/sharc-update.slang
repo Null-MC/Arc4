@@ -6,6 +6,7 @@ import lib.octohedral;
 import lib.hemisphere;
 import lib.sharc;
 import lib.shadow;
+import lib.pbr.material;
 import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
@@ -13,6 +14,10 @@ import lib.sky.view;
 
 
 Texture2D<half4> texDeferNormal;
+
+Texture2D<half4> blockAtlasS;
+
+static const uint SHARC_PATH_DEPTH = 3u;
 
 
 [[shader("compute")]]
@@ -38,57 +43,96 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 geo_normal = octohedral::decode(normalData.xy);
     float3 tex_normal = octohedral::decode(normalData.zw);
 
-    float3 rayOrigin = localPos + 0.04 * geo_normal;
-    float3 worldPos = localPos + ap.camera.position;
+    float3 sunDir = normalize(ap.celestial.sunPosition);
 
-    sharcAccumulate(worldPos, geo_normal, directLighting(localPos, geo_normal, tex_normal), 1.0);
+    float3 pathPositions[4];
+    float3 pathNormals[4];
+    float3 pathShadingNormals[4];
+    float3 pathAlbedos[4];
+    float  pathEmissions[4];
+    uint pathLength = 1u;
+    bool terminatedInSky = false;
+    float3 skyRadiance = 0.0;
 
-    float2 noise = BlueNoise::sampleAnimated2D(globalPos, 2, ap.timing.frameCounter);
-    float3 rayDir = transform_to_world(tex_normal, sampleCosineWeightedHemisphere(noise));
+    pathPositions[0] = localPos;
+    pathNormals[0] = geo_normal;
+    pathShadingNormals[0] = tex_normal;
+    pathAlbedos[0] = 1.0;
+    pathEmissions[0] = 0.0;
 
-    var query = HWRT.startQuery(
-        rayOrigin,
-        rayDir,
-        0.0,
-        max(ap.world.renderDistance, 1.0),
-        HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-        HWRT.RTFlags.NONE);
-    
-    float3 transmitColor = 1.0;
-    while (query.proceed()) {
-        let hit = query.getCandidate();
-        if (hit.getHitType() == HWRT.HitType.TERRAIN && hit.getGeometryIndex() == HWRT.RTGeometryIndex.TRANSLUCENT) continue;
-        
-        let surface = HWRT.decodeHit(hit);
-        float2 hit_uv = surface.getUV();
-        float4 hit_color = surface.albedo().sampleLevel(hit_uv, 0.0) * surface.getColor();
+    for (uint bounce = 0u; bounce < SHARC_PATH_DEPTH; bounce++) {
+        float2 noise = BlueNoise::sampleAnimated2D(globalPos, 2u + bounce, ap.timing.frameCounter);
+        float3 rayDir = transform_to_world(pathShadingNormals[bounce], sampleCosineWeightedHemisphere(noise));
 
-        if (hit_color.a >= 0.99) query.acceptCandidate();
-        else {
-            float3 tint = transformer.fromGamma(hit_color.rgb);
-            // tint = lerp(1.0, tint, hit_color.a);
-            transmitColor *= tint * (1.0 - pow2(hit_color.a));
+        var query = HWRT.startQuery(
+            pathPositions[bounce] + 0.04 * pathNormals[bounce],
+            rayDir,
+            0.0,
+            max(ap.world.renderDistance, 1.0),
+            HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+            HWRT.RTFlags.NONE);
+
+        float3 transmitColor = 1.0;
+        while (query.proceed()) {
+            let candidate = query.getCandidate();
+            let candidateSurface = HWRT.decodeHit(candidate);
+            float4 candidateColor = candidateSurface.albedo().sampleLevel(candidateSurface.getUV(), 0.0) * candidateSurface.getColor();
+
+            if (candidateColor.a >= 0.99) query.acceptCandidate();
+            else {
+                float3 tint = transformer.fromGamma(candidateColor.rgb);
+                transmitColor *= tint * (1.0 - pow2(candidateColor.a));
+            }
         }
+
+        if (!query.hasHit()) {
+            float3 skyPos = planet.getSkyPosition(pathPositions[bounce]);
+            skyRadiance = planet.sampleView(skyPos, rayDir, sunDir);
+            
+            skyRadiance = PI * transmitColor * transformer.fromLinear(skyRadiance);
+            terminatedInSky = true;
+            break;
+        }
+
+        var hit = query.getHit();
+        var surface = HWRT.decodeHit(hit);
+        pathPositions[pathLength] = surface.getPos();
+        pathNormals[pathLength] = surface.getNormal();
+        pathShadingNormals[pathLength] = surface.getNormal();
+
+        float2 hit_uv = surface.getUV();
+        float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
+        half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
+        pathAlbedos[pathLength] = transmitColor * transformer.fromGamma(hit_albedo);
+        pathEmissions[pathLength] = mat_emission(hit_specular.a);
+
+        pathLength++;
     }
 
-    if (!query.hasHit()) {
-        float3 skyPos = planet.getSkyPosition(localPos);
-        float3 sky = transmitColor * planet.sampleView(skyPos, rayDir, normalize(ap.celestial.sunPosition));
-        sharcAccumulate(worldPos, geo_normal, PI * transformer.fromLinear(sky), 1.0);
-        return;
+    float3 downstreamRadiance = 0.0;
+    for (int index = int(pathLength) - 1; index >= 0; index--) {
+        float3 vertexRadiance = directLighting(
+            pathPositions[index],
+            pathNormals[index],
+            pathShadingNormals[index]);
+
+        vertexRadiance += pathEmissions[index];
+
+        if (index == int(pathLength) - 1 && terminatedInSky) {
+            vertexRadiance += skyRadiance;
+        }
+        else if (index < int(pathLength) - 1) {
+            vertexRadiance += pathAlbedos[index + 1] * downstreamRadiance;
+        }
+
+        sharcAccumulate(
+            pathPositions[index] + ap.camera.position,
+            pathNormals[index],
+            vertexRadiance,
+            1.0);
+        
+        downstreamRadiance = vertexRadiance;
     }
-
-    var hit = query.getHit();
-    var surface = HWRT.decodeHit(hit);
-    float3 hit_localPos = surface.getPos();
-    float3 hit_localNormal = surface.getNormal();
-
-    float3 hitRadiance = directLighting(hit_localPos, hit_localNormal, hit_localNormal);
-
-    float3 hit_albedo = surface.albedo().sampleLevel(surface.getUV(), 0.0).rgb * surface.getColor().rgb;
-    hitRadiance *= transmitColor * transformer.fromGamma(hit_albedo.rgb);
-    
-    sharcAccumulate(hit_localPos + ap.camera.position, hit_localNormal, hitRadiance, 1.0);
 }
 
 

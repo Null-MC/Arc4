@@ -21,8 +21,6 @@ float3 _SampleShadow(const in float3 localPos, const in float3 geo_normal, const
     
     while (query.proceed()) {
         let hit = query.getCandidate();
-        if (hit.getHitType() == HWRT.HitType.TERRAIN && hit.getGeometryIndex() == HWRT.RTGeometryIndex.TRANSLUCENT) continue;
-        
         var surface = HWRT.decodeHit(hit);
         float2 hit_uv = surface.getUV();
         let hit_color = surface.albedo().sampleLevel(hit_uv, 0.0) * surface.getColor();
