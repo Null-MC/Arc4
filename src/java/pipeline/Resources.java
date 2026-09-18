@@ -60,7 +60,7 @@ public class Resources {
             .renderSize()
             .create();
 
-        texDeferData = pipeline.texture2D("texDeferData", TextureFormat.R32_UINT)
+        texDeferData = pipeline.texture2D("texDeferData", TextureFormat.RG16_UINT)
             .renderSize()
             .create();
 

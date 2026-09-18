@@ -8,12 +8,19 @@ import lib.sky.transmit;
 import lib.sky.multiscatter;
 import lib.sky.view;
 import lib.exposure;
+import lib.octohedral;
 
+
+extern static const bool DebugDefer = false;
 
 Texture2D<float3> tex_read;
 
 Texture2D<float3> texBloom;
 Texture1D<uint> texHistogram;
+Texture2D<half3> texDeferColor;
+Texture2D<half4> texDeferNormal;
+Texture2D<half4> texDeferSpecular;
+Texture2D<half2> texDeferData;
 
 
 [[shader("pixel")]]
@@ -21,6 +28,31 @@ float3 main(float2 fragPos: SV_Position) {
     uint2 uv = uint2(fragPos);
     float3 color = tex_read[uv];
     float2 texcoord;
+
+    if (DebugDefer) {
+        // Geometry Normal
+        if (debugWindow(uv, int2(8, 8), int2(320, 240), texcoord)) {
+            half2 geoNormalData = texDeferNormal.SampleLevel(apt_nearestSampler, texcoord, 0.0).xy;
+            color = octohedral::decode(geoNormalData) * 0.5 + 0.5;
+        }
+        // Texture Normal
+        if (debugWindow(uv, int2(8, 256), int2(320, 240), texcoord)) {
+            half2 geoNormalData = texDeferNormal.SampleLevel(apt_nearestSampler, texcoord, 0.0).zw;
+            color = octohedral::decode(geoNormalData) * 0.5 + 0.5;
+        }
+        // Albedo Color
+        if (debugWindow(uv, int2(336, 8), int2(320, 240), texcoord)) {
+            color = texDeferColor.SampleLevel(apt_nearestSampler, texcoord, 0.0);
+        }
+        // Data
+        if (debugWindow(uv, int2(336, 256), int2(320, 240), texcoord)) {
+            color = 0.1 * asfloat(texDeferData.SampleLevel(apt_nearestSampler, texcoord, 0.0).g);
+        }
+        // Specular smoothness, f0, emission
+        if (debugWindow(uv, int2(672, 8), int2(320, 240), texcoord)) {
+            color = texDeferSpecular.SampleLevel(apt_nearestSampler, texcoord, 0.0).rga;
+        }
+    }
 
     if (userSettings.Debug_SkyLuts) {
         if (debugWindow(uv, int2(8, 8), int2(512, 128), texcoord)) {

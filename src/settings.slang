@@ -43,6 +43,7 @@ struct Settings {
     float Exposure_Min;
     float Exposure_Offset;
     float SeaLevel;
+    float Sharc_BucketSize;
     float Sky_BarometricPressure;
     float Sky_FogIntensity;
     float Sky_Humidity;

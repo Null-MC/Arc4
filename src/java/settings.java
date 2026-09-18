@@ -16,6 +16,7 @@ public class settings implements PackSettings {
 
         subscreen(screen, "Sharc", screen_sharc -> {
             screen_sharc.option("Sharc_Enabled", OptionType.boolType(true), false);
+            screen_sharc.option("Sharc_BucketSize", OptionType.floatType(new float[]{0.25f, 0.50f, 1.00f}, 0.5f), true);
             screen_sharc.option("Debug_SHARC", OptionType.boolType(false), true);
         });
 

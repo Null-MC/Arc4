@@ -14,36 +14,51 @@ import lib.sky.view;
 
 
 Texture2D<half4> texDeferNormal;
+Texture2D<half4> texDeferSpecular;
 
 Texture2D<half4> blockAtlasS;
 
 static const uint SHARC_PATH_DEPTH = 3u;
+extern static const int SHARC_UPDATE_TILE_SIZE;
 
 
 [[shader("compute")]]
 [numthreads(16,16)]
 void main(uint2 globalPos : SV_DispatchThreadID) {
-    if (any(globalPos >= ap.game.renderSize)) return;
+    // Each dispatched thread owns one SHARC_UPDATE_TILE_SIZE^2 tile and samples
+    // a different pixel within it each frame, so no threads are wasted.
+    uint2 tileOffset = uint2(
+        ap.timing.frameCounter % SHARC_UPDATE_TILE_SIZE,
+        (ap.timing.frameCounter / SHARC_UPDATE_TILE_SIZE) % SHARC_UPDATE_TILE_SIZE
+    );
+    uint2 pixelPos = globalPos * uint(SHARC_UPDATE_TILE_SIZE) + tileOffset;
+    if (any(pixelPos >= ap.game.renderSize)) return;
 
-    // Process a sparse, temporally distributed subset of primary pixels.
-    uint sampleIndex = globalPos.x + globalPos.y * ap.game.renderSize.x;
-    if ((sampleIndex + ap.timing.frameCounter * 17u) % 5u != 0u) return;
-
-    float depth = ap.depth[globalPos];
+    float depth = ap.depth[pixelPos];
     if (depth <= 0.0) return;
 
-    float2 texcoord = (globalPos + 0.5) / ap.game.renderSize;
+    float2 texcoord = (pixelPos + 0.5) / ap.game.renderSize;
     if (userSettings.TAA_Enabled) texcoord -= scene.TAA_jitter;
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
+
+    // Slightly scale down the view position to avoid precision issues.
+    viewPos *= 0.99;
+
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
-    half4 normalData = texDeferNormal[globalPos];
+    half4 normalData = texDeferNormal[pixelPos];
     float3 geo_normal = octohedral::decode(normalData.xy);
     float3 tex_normal = octohedral::decode(normalData.zw);
 
     float3 sunDir = normalize(ap.celestial.sunPosition);
+
+    half4 specularMap = texDeferSpecular[globalPos];
+    float sss = mat_sss_lab(specularMap.b);
+
+    float sssDither = BlueNoise::sampleAnimated1D(globalPos, 1, ap.timing.frameCounter);
+    bool is_sss = sss > sssDither;
 
     float3 pathPositions[4];
     float3 pathNormals[4];
@@ -61,8 +76,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     pathEmissions[0] = 0.0;
 
     for (uint bounce = 0u; bounce < SHARC_PATH_DEPTH; bounce++) {
-        float2 noise = BlueNoise::sampleAnimated2D(globalPos, 2u + bounce, ap.timing.frameCounter);
+        float2 noise = BlueNoise::sampleAnimated2D(pixelPos, 2u + bounce, ap.timing.frameCounter);
         float3 rayDir = transform_to_world(pathShadingNormals[bounce], sampleCosineWeightedHemisphere(noise));
+
+        if (dot(rayDir, pathNormals[bounce]) < 0.0) rayDir = -rayDir;
+        
+        if (bounce == 0 && is_sss) rayDir = -rayDir;
 
         var query = HWRT.startQuery(
             pathPositions[bounce] + 0.04 * pathNormals[bounce],
@@ -81,7 +100,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             if (candidateColor.a >= 0.99) query.acceptCandidate();
             else {
                 float3 tint = transformer.fromGamma(candidateColor.rgb);
-                transmitColor *= tint * (1.0 - pow2(candidateColor.a));
+                tint *= 1.0 - candidateColor.a;
+                // tint = lerp(1.0, tint, candidateColor.a);
+                transmitColor *= tint;
             }
         }
 
@@ -114,7 +135,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 vertexRadiance = directLighting(
             pathPositions[index],
             pathNormals[index],
-            pathShadingNormals[index]);
+            pathShadingNormals[index],
+            index == 0 ? is_sss : false);
 
         vertexRadiance += pathEmissions[index];
 
@@ -136,14 +158,19 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 }
 
 
-float3 directLighting(const in float3 localPos, const in float3 geo_normal, const in float3 tex_normal) {
+float3 directLighting(const in float3 localPos, const in float3 geo_normal, const in float3 tex_normal, const in bool sss) {
     float3 sunDir = normalize(ap.celestial.sunPosition);
     float3 moonDir = normalize(ap.celestial.moonPosition);
     float3 skyLightDir = normalize(ap.celestial.position);
 
     float3 skyPos = planet.getSkyPosition(localPos);
-    float3 result = planet.sampleTransmit(skyPos, sunDir) * SunColor * max(dot(tex_normal, sunDir), 0.0);
-    result += planet.sampleTransmit(skyPos, moonDir) * MoonColor * max(dot(tex_normal, moonDir), 0.0);
+    float3 sunLight = planet.sampleTransmit(skyPos, sunDir) * SunColor;
+    float3 moonLight = planet.sampleTransmit(skyPos, moonDir) * MoonColor;
 
-    return result * SampleShadow(localPos, geo_normal);
+    if (!sss) {
+        sunLight *= max(dot(tex_normal, sunDir), 0.0);
+        moonLight *= max(dot(tex_normal, moonDir), 0.0);
+    }
+
+    return (sunLight + moonLight) * SampleShadow(localPos, geo_normal);
 }

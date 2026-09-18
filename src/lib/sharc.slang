@@ -1,14 +1,16 @@
 public module sharc;
 
 import aperture;
+import settings;
 
-extern static const uint SHARC_BUCKET_COUNT;
+extern static const int SHARC_BUCKET_COUNT;
+// Java only exports signed spec constants; alias to uint for use throughout this file.
+static const uint SHARC_BUCKET_COUNT_U = uint(SHARC_BUCKET_COUNT);
 static const uint SHARC_CASCADE_COUNT = 4u;
-static const uint SHARC_BUCKETS_PER_CASCADE = SHARC_BUCKET_COUNT / SHARC_CASCADE_COUNT;
+static const uint SHARC_BUCKETS_PER_CASCADE = SHARC_BUCKET_COUNT_U / SHARC_CASCADE_COUNT;
 static const uint SHARC_PROBE_COUNT = 4u;
 static const uint SHARC_EMPTY_KEY = 0u;
 static const uint SHARC_TOMBSTONE_KEY = 0xffffffffu;
-static const float SHARC_CELL_SIZE = 0.25;
 static const float SHARC_CASCADE_DISTANCE_0 = 16.0;
 static const float SHARC_CASCADE_DISTANCE_1 = 64.0;
 static const float SHARC_CASCADE_DISTANCE_2 = 256.0;
@@ -18,9 +20,17 @@ static const float SHARC_SURFACE_OFFSET = 0.01;
 static const float SHARC_RADIANCE_SCALE = 256.0;
 static const float SHARC_MAX_ACCUMULATED_RADIANCE = 16384.0;
 static const uint SHARC_MAX_FRAME_SAMPLES = 256u;
-static const uint SHARC_MIN_QUERY_SAMPLES = 32u;
+static const uint SHARC_MIN_QUERY_SAMPLES = 8u;
 static const uint SHARC_MAX_HISTORY = 512u;
 static const uint SHARC_STALE_FRAME_MAX = 120u;
+// When all probes for a key are occupied by unrelated entries, force-evict
+// whichever one has gone longest untouched rather than waiting for the
+// passive stale sweep in Resolve. The minimum age avoids evicting entries
+// that are still being actively refreshed by contending live cells.
+static const float SHARC_FORCE_EVICT_MIN_AGE = 8.0;
+// New entries are seeded from a neighboring cascade at reduced confidence
+// instead of starting cold, to hide LOD transitions during camera movement.
+static const float SHARC_SEED_SAMPLES = float(SHARC_MIN_QUERY_SAMPLES) * 0.5;
 
 struct SharcHashEntry {
     uint2 key;
@@ -68,7 +78,7 @@ uint sharcCascade(const in float3 worldPos) {
 }
 
 float sharcCellSize(const in uint cascade) {
-    return SHARC_CELL_SIZE * exp2(float(cascade));
+    return userSettings.Sharc_BucketSize * exp2(float(cascade));
 }
 
 float3 sharcCanonicalNormal(const in float3 normal) {
@@ -113,13 +123,59 @@ uint sharcFind(const in uint2 key, const in float3 normal, const in uint cascade
         if (all(sharcHashEntries[index].key == key) &&
             sharcNormalMatches(sharcHashEntries[index].normalFrame.xyz, normal)) return index;
     }
-    return SHARC_BUCKET_COUNT;
+    return SHARC_BUCKET_COUNT_U;
 }
 
-uint sharcAcquire(const in uint2 key, const in float3 normal, const in uint cascade) {
+bool sharcFindInCascade(
+    const in float3 worldPos,
+    const in float3 normal,
+    const in uint neighborCascade,
+    out float3 radiance,
+    out float samples
+) {
+    uint2 neighborKey = sharcKey(sharcCell(worldPos, normal, neighborCascade), normal, neighborCascade);
+    uint neighborIndex = sharcFind(neighborKey, normal, neighborCascade);
+    if (neighborIndex == SHARC_BUCKET_COUNT_U) {
+        radiance = 0.0;
+        samples = 0.0;
+        return false;
+    }
+
+    SharcResolvedEntry entry = sharcResolved[neighborIndex];
+    radiance = entry.radiance;
+    samples = entry.samples;
+    return samples > 0.0;
+}
+
+// Prefer the finer cascade's data first since it best matches surface detail.
+void sharcSeedResolved(
+    const in uint index,
+    const in float3 worldPos,
+    const in float3 normal,
+    const in uint cascade
+) {
+    float3 radiance;
+    float samples;
+
+    if (cascade > 0u && sharcFindInCascade(worldPos, normal, cascade - 1u, radiance, samples)) {
+        sharcResolved[index].radiance = radiance;
+        sharcResolved[index].samples = min(samples, SHARC_SEED_SAMPLES);
+        return;
+    }
+
+    if (cascade + 1u < SHARC_CASCADE_COUNT && sharcFindInCascade(worldPos, normal, cascade + 1u, radiance, samples)) {
+        sharcResolved[index].radiance = radiance;
+        sharcResolved[index].samples = min(samples, SHARC_SEED_SAMPLES);
+    }
+}
+
+uint sharcAcquire(const in float3 worldPos, const in uint2 key, const in float3 normal, const in uint cascade) {
     float3 canonicalNormal = sharcCanonicalNormal(normal);
-    uint tombstone = SHARC_BUCKET_COUNT;
-    uint empty = SHARC_BUCKET_COUNT;
+    uint tombstone = SHARC_BUCKET_COUNT_U;
+    uint empty = SHARC_BUCKET_COUNT_U;
+    uint victim = SHARC_BUCKET_COUNT_U;
+    uint victimKey = 0u;
+    float victimAge = SHARC_FORCE_EVICT_MIN_AGE;
 
     for (uint probe = 0u; probe < SHARC_PROBE_COUNT; probe++) {
         uint index = sharcIndex(key.x, probe, cascade);
@@ -131,15 +187,25 @@ uint sharcAcquire(const in uint2 key, const in float3 normal, const in uint casc
             return index;
         }
 
-        if (currentKey == SHARC_TOMBSTONE_KEY && tombstone == SHARC_BUCKET_COUNT) {
+        if (currentKey == SHARC_TOMBSTONE_KEY && tombstone == SHARC_BUCKET_COUNT_U) {
             tombstone = index;
             continue;
         }
 
-        if (currentKey == SHARC_EMPTY_KEY && empty == SHARC_BUCKET_COUNT) empty = index;
+        if (currentKey == SHARC_EMPTY_KEY && empty == SHARC_BUCKET_COUNT_U) {
+            empty = index;
+            continue;
+        }
+
+        float age = ap.timing.frameCounter - sharcHashEntries[index].normalFrame.w;
+        if (age >= victimAge) {
+            victimAge = age;
+            victim = index;
+            victimKey = currentKey;
+        }
     }
 
-    if (tombstone != SHARC_BUCKET_COUNT) {
+    if (tombstone != SHARC_BUCKET_COUNT_U) {
         uint observed;
         InterlockedCompareExchange(
             sharcHashEntries[tombstone].key.x,
@@ -156,11 +222,12 @@ uint sharcAcquire(const in uint2 key, const in float3 normal, const in uint casc
             sharcResolved[tombstone].samples = 0.0;
             sharcHashEntries[tombstone].key.y = key.y;
             sharcHashEntries[tombstone].normalFrame = float4(canonicalNormal, ap.timing.frameCounter);
+            sharcSeedResolved(tombstone, worldPos, normal, cascade);
             return tombstone;
         }
     }
 
-    if (empty != SHARC_BUCKET_COUNT) {
+    if (empty != SHARC_BUCKET_COUNT_U) {
         uint observed;
         InterlockedCompareExchange(
             sharcHashEntries[empty].key.x,
@@ -171,11 +238,34 @@ uint sharcAcquire(const in uint2 key, const in float3 normal, const in uint casc
         if (observed == SHARC_EMPTY_KEY) {
             sharcHashEntries[empty].key.y = key.y;
             sharcHashEntries[empty].normalFrame = float4(canonicalNormal, ap.timing.frameCounter);
+            sharcSeedResolved(empty, worldPos, normal, cascade);
             return empty;
         }
     }
 
-    return SHARC_BUCKET_COUNT;
+    if (victim != SHARC_BUCKET_COUNT_U) {
+        uint observed;
+        InterlockedCompareExchange(
+            sharcHashEntries[victim].key.x,
+            victimKey,
+            key.x,
+            observed
+        );
+        if (observed == victimKey) {
+            sharcAccumulation[victim].radianceR = 0u;
+            sharcAccumulation[victim].radianceG = 0u;
+            sharcAccumulation[victim].radianceB = 0u;
+            sharcAccumulation[victim].samples = 0u;
+            sharcResolved[victim].radiance = 0.0;
+            sharcResolved[victim].samples = 0.0;
+            sharcHashEntries[victim].key.y = key.y;
+            sharcHashEntries[victim].normalFrame = float4(canonicalNormal, ap.timing.frameCounter);
+            sharcSeedResolved(victim, worldPos, normal, cascade);
+            return victim;
+        }
+    }
+
+    return SHARC_BUCKET_COUNT_U;
 }
 
 bool sharcReserveSample(const in uint index) {
@@ -206,8 +296,8 @@ void sharcAccumulate(
 
     uint cascade = sharcCascade(worldPos);
     uint2 key = sharcKey(sharcCell(worldPos, normal, cascade), normal, cascade);
-    uint index = sharcAcquire(key, normal, cascade);
-    if (index == SHARC_BUCKET_COUNT) return;
+    uint index = sharcAcquire(worldPos, key, normal, cascade);
+    if (index == SHARC_BUCKET_COUNT_U) return;
     if (!sharcReserveSample(index)) return;
 
     uint3 value = uint3(
@@ -224,7 +314,21 @@ float3 sharcLookup(const in float3 worldPos, const in float3 normal, out float c
     uint cascade = sharcCascade(worldPos);
     uint2 key = sharcKey(sharcCell(worldPos, normal, cascade), normal, cascade);
     uint index = sharcFind(key, normal, cascade);
-    if (index == SHARC_BUCKET_COUNT) {
+    if (index == SHARC_BUCKET_COUNT_U) {
+        // No entry yet at this cascade (e.g. it just crossed an LOD boundary).
+        // Borrow a neighboring cascade's data so queries don't go cold while
+        // waiting for the sparse Update pass to revisit this exact cell.
+        float3 neighborRadiance;
+        float neighborSamples;
+        if (cascade > 0u && sharcFindInCascade(worldPos, normal, cascade - 1u, neighborRadiance, neighborSamples)) {
+            confidence = smoothstep(0.0, SHARC_SEED_SAMPLES, min(neighborSamples, SHARC_SEED_SAMPLES));
+            return neighborRadiance;
+        }
+        if (cascade + 1u < SHARC_CASCADE_COUNT && sharcFindInCascade(worldPos, normal, cascade + 1u, neighborRadiance, neighborSamples)) {
+            confidence = smoothstep(0.0, SHARC_SEED_SAMPLES, min(neighborSamples, SHARC_SEED_SAMPLES));
+            return neighborRadiance;
+        }
+
         confidence = 0.0;
         return 0.0;
     }

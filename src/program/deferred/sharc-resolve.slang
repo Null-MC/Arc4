@@ -4,7 +4,7 @@ import lib.sharc;
 [[shader("compute")]]
 [numthreads(256)]
 void main(uint index : SV_DispatchThreadID) {
-    if (index >= SHARC_BUCKET_COUNT) return;
+    if (index >= SHARC_BUCKET_COUNT_U) return;
 
     if (sharcHashEntries[index].key.x != SHARC_EMPTY_KEY &&
         sharcHashEntries[index].key.x != SHARC_TOMBSTONE_KEY &&

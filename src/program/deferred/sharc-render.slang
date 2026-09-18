@@ -17,6 +17,7 @@ import lib.sky.view;
 RWTexture2D<float4> texDiffuse_write;
 
 Texture2D<half4> texDeferNormal;
+Texture2D<half4> texDeferSpecular;
 
 Texture2D<half4> blockAtlasS;
 
@@ -33,10 +34,15 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
+
+    // Slightly scale down the view position to avoid precision issues.
+    viewPos *= 0.99;
+
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
     if (depth > 0.0) {
         diffuse.a = 1.0;
+
         half4 normalData = texDeferNormal[globalPos];
         float3 geo_normal = octohedral::decode(normalData.xy);
         float3 tex_normal = octohedral::decode(normalData.zw);
@@ -54,19 +60,42 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float2 noise = BlueNoise::sampleAnimated2D(globalPos, 0, ap.timing.frameCounter);
         float3 rayDir = transform_to_world(tex_normal, sampleCosineWeightedHemisphere(noise));
 
+        if (dot(rayDir, geo_normal) < 0.0) rayDir = -rayDir;
+
+        half4 specularMap = texDeferSpecular[globalPos];
+        float sss = mat_sss_lab(specularMap.b);
+        
+        float sssDither = BlueNoise::sampleAnimated1D(globalPos, 1, ap.timing.frameCounter);
+        bool is_sss = sss > sssDither;
+
+        float3 rayBias = 0.002 * geo_normal;
+        if (is_sss) {
+            rayDir = -rayDir;
+            rayBias = -rayBias;
+        }
+
         var query = HWRT.startQuery(
-            localPos + 0.002 * geo_normal,
+            localPos + rayBias,
             rayDir,
             0.0,
             max(ap.world.renderDistance, 1.0),
             HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
             HWRT.RTFlags.NONE);
         
+        float3 transmitColor = 1.0;
         while (query.proceed()) {
             let hit = query.getCandidate();
             let surface = HWRT.decodeHit(hit);
-            float alpha = surface.albedo().sampleLevel(surface.getUV(), 0.0).a;// * surface.getColor().a;
-            if (alpha >= 0.1) query.acceptCandidate();
+
+            float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
+
+            if (hit_color.a >= 0.99) query.acceptCandidate();
+            else {
+                float3 tint = transformer.fromGamma(hit_color.rgb);
+                tint *= 1.0 - hit_color.a;
+                // tint = lerp(1.0, tint, hit_color.a);
+                transmitColor *= tint;
+            }
         }
 
         if (!query.hasHit()) {
@@ -85,8 +114,15 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 skyLightDir = normalize(ap.celestial.position);
 
             float3 skyPos = planet.getSkyPosition(localPos);
-            float3 hitDiffuse = planet.sampleTransmit(skyPos, sunDir) * SunColor * max(dot(tex_normal, sunDir), 0.0);
-            hitDiffuse += planet.sampleTransmit(skyPos, moonDir) * MoonColor * max(dot(tex_normal, moonDir), 0.0);
+            float3 sunLight = planet.sampleTransmit(skyPos, sunDir) * SunColor;
+            float3 moonLight = planet.sampleTransmit(skyPos, moonDir) * MoonColor;
+
+            if (!is_sss) {
+                sunLight *= max(dot(tex_normal, sunDir), 0.0);
+                moonLight *= max(dot(tex_normal, moonDir), 0.0);
+            }
+            
+            float3 hitDiffuse = sunLight + moonLight;
 
             hitDiffuse *= SampleShadow(localPos, geo_normal);
 
@@ -97,6 +133,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float cacheWeight = confidence * 0.75;
             hitDiffuse = lerp(hitDiffuse, cachedRadiance, cacheWeight);
 
+            if (is_sss) hitDiffuse *= PI;
+
             float2 hit_uv = surface.getUV();
             float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
             half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
@@ -104,6 +142,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             
             diffuse.rgb += hitDiffuse * transformer.fromGamma(hit_albedo);
         }
+
+        diffuse.rgb *= transmitColor;
     }
 
     diffuse.rgb = clamp(diffuse.rgb, 0.0, half.maxValue);

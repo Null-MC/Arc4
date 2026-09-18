@@ -74,14 +74,6 @@ float3 mul_project(const in float4x4 matrix, const in float3 vector) {
     return result.xyz / result.w;
 }
 
-float3 fakeTexture(const in float3 localPos) {
-    const float3 color1 = 1.0;
-    const float3 color2 = 0.5;
-
-    float3 worldFract = fract(localPos + ap.camera.position);
-
-    float3 f = floor(worldFract * 4.0);
-    float checker = fmod(f.x + f.y + f.z, 2.0);
-    float3 color = lerp(color1, color2, checker);
-    return transformer.fromLinear(color);
+float lengthSq(float3 vec) {
+    return dot(vec, vec);
 }

@@ -5,12 +5,17 @@ import lib.common;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.multiscatter;
+import lib.sky.view;
 import lib.noise.hash;
+import lib.noise.blue;
 import lib.froxel;
+import lib.shadow;
+import lib.hemisphere;
 
 
 extern static const int Froxel_MaxFrames = 15;
 extern static const uint Froxel_SkyLight_StepCount = 8;
+extern static const bool Froxel_TraceIndirect = false;
 
 [[vk::image_format("rgba16f")]]
 RWTexture3D<half4> texFroxel_write;
@@ -43,8 +48,8 @@ void main(ComputeInput input) {
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
     float3 localDir = normalize(localPos);
 
-    float3 skyLightDir = normalize(ap.celestial.position);
-    float shadowF = SampleShadow(localPos, skyLightDir);
+    // float3 skyLightDir = normalize(ap.celestial.position);
+    float3 shadowF = SampleShadow(localPos, 0.0);
 
     float dither = hash13(seed);
 
@@ -58,6 +63,7 @@ void main(ComputeInput input) {
     float VoL_moon = dot(localDir, moonDir);
     float miePhase_moon = getMiePhase(VoL_moon);
 
+    float3 skyLightDir = normalize(ap.celestial.position);
     float atmoDist = planet.rayIntersectsAtmosphere(skyPos, skyLightDir);
     // TODO: use min of ground dist?
     float stepDist = atmoDist / Froxel_SkyLight_StepCount;
@@ -91,8 +97,38 @@ void main(ComputeInput input) {
         transmittance *= sampleTransmittance;
     }
 
-    // TODO: replace with random trace
-    float3 indirect = planet.sampleMultiScatter(skyPos, sunDir);
+    float3 indirect;
+    if (Froxel_TraceIndirect) {
+        float2 rayNoise = BlueNoise::sampleAnimated2D(input.globalPos.xy, input.globalPos.z, ap.timing.frameCounter);
+        float3 rayDir = sampleSphere(rayNoise);
+
+        var query = HWRT.startQuery(
+            localPos,
+            rayDir,
+            0.0,
+            max(ap.world.renderDistance, 1.0),
+            HWRT.HitType.TERRAIN,
+            HWRT.RTFlags.ACCEPT_FIRST_HIT_AND_END_SEARCH);
+
+        while (query.proceed()) {
+            let hit = query.getCandidate();            
+            let surface = HWRT.decodeHit(hit);
+
+            float alpha = surface.albedo().sampleLevel(surface.getUV(), 0.0).a;// * surface.getColor();
+            if (alpha >= 0.1) query.acceptCandidate();
+        }
+
+        indirect = 0.0;
+        if (!query.hasHit()) {
+            // sky
+            float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+            indirect = PI * transformer.fromLinear(skyColor);
+        }
+    }
+    else {
+        indirect = planet.sampleMultiScatter(skyPos, sunDir);
+    }
+
 
     scattering = indirect * transmittance + scattering * shadowF;
 
@@ -118,26 +154,4 @@ void main(ComputeInput input) {
     half3 final = lerp(froxelPrev.rgb, half3(scattering), rcp(counter));
 
     texFroxel_write[input.globalPos] = half4(final, counter);
-}
-
-
-float SampleShadow(const in float3 localPos, const in float3 skyLightDir) {
-    var query = HWRT.startQuery(
-        localPos,
-        skyLightDir,
-        0.002,
-        max(ap.world.renderDistance, 1.0),
-        HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-        HWRT.RTFlags.ACCEPT_FIRST_HIT_AND_END_SEARCH);
-    
-    while (query.proceed()) {
-        let hit = query.getCandidate();
-        var hit_surface = HWRT.decodeHit(hit);
-        float2 hit_uv = hit_surface.getUV();
-
-        float alpha = hit_surface.albedo().sampleLevel(hit_uv, 0.0).a * hit_surface.getColor().a;
-        if (alpha >= 0.1) query.acceptCandidate();
-    }
-
-    return query.hasHit() ? 0.0 : 1.0;
 }

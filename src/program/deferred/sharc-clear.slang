@@ -4,7 +4,7 @@ import lib.sharc;
 [[shader("compute")]]
 [numthreads(256)]
 void main(uint index : SV_DispatchThreadID) {
-    if (ap.timing.frameCounter != 0 || index >= SHARC_BUCKET_COUNT) return;
+    if (ap.timing.frameCounter != 0 || index >= SHARC_BUCKET_COUNT_U) return;
 
     sharcHashEntries[index].key = uint2(0u, 0u);
     sharcHashEntries[index].normalFrame = 0.0;

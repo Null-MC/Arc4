@@ -1,7 +1,9 @@
 import aperture;
 import settings;
 import object_shader;
+import lib.common;
 import lib.octohedral;
+import lib.ray_cone;
 
 
 extern static const bool IsTranslucent = false;
@@ -20,7 +22,7 @@ struct FragmentData {
     half4 color;
     half4 normal;
     half4 specular;
-    uint data;
+    uint2 data;
 }
 
 
@@ -33,7 +35,7 @@ struct DeferShader : Shader<VertexData, FragmentData> {
         output.normal = input.normal()
             .orElse(ap.camera.viewInv[3].xyz);
 
-        float4 tangent = input.tangent().orElse(0.0);
+        float4 tangent = input.tangent().orElse(float4(0,0,0,1));
         output.tangent = tangent.xyz;
         output.tangent_w = tangent.w;
 
@@ -54,9 +56,16 @@ struct DeferShader : Shader<VertexData, FragmentData> {
 
     static FragmentData shadeSurface(PixelData objectData, VertexData input) {
         half4 color = half4(input.color);
+        half fWidth = 0.0h;
 
         if (let texAlbedo = objectData.albedo()) {
             color *= half4(texAlbedo.sampleBias(input.uv, -1.0));
+
+            int3 size = texAlbedo.getSize();
+            // float2 dX = ddx(input.uv) * size.xy;
+            // float2 dY = ddy(input.uv) * size.xy;
+            // fWidth = half(sqrt(max(dot(dX, dX), dot(dY, dY))));
+            fWidth = half(RayCone.CreateFromRaster(input.uv, size.xy).width);
         }
 
         ap.discardCutout(color);
@@ -66,21 +75,34 @@ struct DeferShader : Shader<VertexData, FragmentData> {
         float3 tex_normal = geo_normal;
 
         if (let texNormalMap = objectData.normal()) {
-            half4 normalData = half4(texNormalMap.sampleTexture(input.uv));
+            float shit = lengthSq(input.tangent);
+            if (any(input.tangent != 0.0)) {
+                float4 normalData = texNormalMap.sampleTexture(input.uv);
 
-            float3x3 tbn;
-            tbn[0] = geo_tangent;
-            tbn[1] = cross(geo_tangent, geo_normal) * sign(input.tangent_w);
-            tbn[2] = geo_normal;
+                if (any(normalData.xy != 1.0)) {
+                    float3x3 tbn;
+                    tbn[0] = geo_tangent;
+                    // tbn[1] = cross(geo_tangent, geo_normal) * sign(input.tangent_w);
+                    tbn[1] = cross(geo_tangent, geo_normal) * (input.tangent_w >= 0.0 ? 1.0 : -1.0);
+                    tbn[2] = geo_normal;
 
-            tex_normal.xy = normalData.xy * 2.0 - 1.0;
-            tex_normal.z = sqrt(1.0 - dot(tex_normal.xy, tex_normal.xy));
-            tex_normal = mul(tex_normal, tbn);
+                    tex_normal.xy = normalData.xy * 2.0 - 1.0;
+                    tex_normal.z = sqrt(1.0 - saturate(dot(tex_normal.xy, tex_normal.xy)));
+                    tex_normal = mul(tex_normal, tbn);
+                }
+            }
         }
 
         half4 specular = 0.0h;
         if (let texSpecularMap = objectData.specular()) {
             specular = half4(texSpecularMap.sampleTexture(input.uv));
+        }
+
+        if (input.blockId == 1) {
+            // water
+            if (all(specular.rg == 0.0)) {
+                specular.rg = half2(1.0h, 0.02h);
+            }
         }
 
         if (!IsTranslucent) color.a = 1.0h;
@@ -90,7 +112,7 @@ struct DeferShader : Shader<VertexData, FragmentData> {
         output.normal.xy = octohedral::encode(half3(geo_normal));
         output.normal.zw = octohedral::encode(half3(tex_normal));
         output.specular = specular;
-        output.data = input.blockId;
+        output.data = uint2(input.blockId, asuint16(fWidth));
         return output;
     }
 }

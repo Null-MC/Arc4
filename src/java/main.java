@@ -117,7 +117,7 @@ public class main implements ShaderPack {
             //     diffuseFlipper.flip();
             // }
 
-            stage.compute("OpaqueDeferred", "program/deferred/opaque", "main")
+            stage.compute("Deferred-Composite", "program/deferred/composite", "main")
                 .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
                 .overrideObject("texSpecular_read", specularFlipper.getReader().name())
                 .overrideObject("texMain_write", mainFlipper.getWriter().name())

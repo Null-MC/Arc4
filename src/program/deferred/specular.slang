@@ -13,15 +13,19 @@ import lib.sky.sun;
 import lib.pbr.lazanyi;
 import lib.pbr.hcm;
 import lib.pbr.ggx;
+import lib.pbr.material;
+import lib.ray_cone;
 
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float4> texSpecular_write;
 
+Texture2D<half4> blockAtlasS;
+
 Texture2D<half4> texDeferColor;
 Texture2D<half4> texDeferNormal;
 Texture2D<half4> texDeferSpecular;
-Texture2D<uint> texDeferData;
+Texture2D<uint2> texDeferData;
 
 
 [[shader("compute")]]
@@ -41,6 +45,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
+
+    // Slightly scale down the view position to avoid precision issues.
+    viewPos *= 0.99;
+
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
     if (depth > 0.0) {
@@ -53,8 +61,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 viewDir = normalize(viewPos);
         float3 viewNormal = mul(float3x3(ap.camera.view), tex_normal);
 
-        float dither = BlueNoise::sampleAnimated1D(globalPos, 0, ap.timing.frameCounter);
-
         half4 specularMap = texDeferSpecular[globalPos];
 
         float f0 = specularMap.g;
@@ -65,6 +71,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 localViewDir = -normalize(localPos);
         float NoV = max(dot(tex_normal, localViewDir), 0.0);
         float F_s = F_schlick(NoV, f0, 1.0);
+
+        float dither = BlueNoise::sampleAnimated1D(globalPos, 0, ap.timing.frameCounter);
         bool is_reflect = F_s >= dither;
 
         float3 rayViewDir;
@@ -91,18 +99,27 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             );
 
             rayViewDir = reflect(viewDir, microfacetNormal);
-            if (dot(rayViewDir, viewNormal) <= 0.0) {
-                rayViewDir = reflect(viewDir, viewNormal);
+
+            float3 geoViewNormal = mul(float3x3(ap.camera.view), geo_normal);
+            if (dot(rayViewDir, geoViewNormal) <= 0.0) {
+                // TODO: terminate instead of geometry?
+                // rayViewDir = reflect(viewDir, geoViewNormal);
+                texSpecular_write[globalPos] = 0.0;
+                return;
             }
         }
+
+        uint2 deferData = texDeferData[globalPos];
+        float fWidth = asfloat(deferData.g);
+        var cone = RayCone.CreateFromGBuffer(fWidth);
 
         float3 rayDir = mul(float3x3(ap.camera.viewInv), rayViewDir);
         float3 sunDir = normalize(ap.celestial.sunPosition);
 
         var query = HWRT.startQuery(
-            localPos,
+            localPos + 0.002 * geo_normal,
             rayDir,
-            0.002,
+            0.0,
             max(ap.world.renderDistance, 1.0),
             HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
             HWRT.RTFlags.NONE);
@@ -111,13 +128,20 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         while (query.proceed()) {
             let hit = query.getCandidate();
             let surface = HWRT.decodeHit(hit);
-            let hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0);// * surface.getColor();
+            float3 hit_localPos = surface.getPos();
+
+            let size = surface.albedo().getSize();
+            let cone2 = cone.Propagate(distance(localPos, hit_localPos));
+            var mip = cone2.CalculateMipLevel(size.z);
+
+            let hit_color = surface.albedo().sampleLevel(surface.getUV(), mip);// * surface.getColor();
             
             if (hit_color.a >= 0.99) query.acceptCandidate();
             else {
                 float3 tint = transformer.fromGamma(hit_color.rgb);
-                // tint = lerp(1.0, tint, hit_color.a);
-                transmitColor *= tint * (1.0 - pow2(hit_color.a));
+                tint *= 1.0 - hit_color.a;
+                tint = lerp(1.0, tint, hit_color.a);
+                transmitColor *= tint;
             }
         }
 
@@ -167,7 +191,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 hit_diffuse = lerp(hit_diffuse, sharcRadiance, sharcWeight);
             }
 
-            float3 hit_albedo = surface.albedo().sampleLevel(surface.getUV(), 0.0).rgb * surface.getColor().rgb;
+            float2 hit_uv = surface.getUV();
+            let size = surface.albedo().getSize();
+            let cone2 = cone.Propagate(distance(localPos, hit_localPos));
+            var mip = cone2.CalculateMipLevel(size.z);
+
+            float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, mip).rgb * surface.getColor().rgb;
+            hit_diffuse += mat_emission(blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, mip).a);
+
             specular.rgb = hit_diffuse * transformer.fromGamma(hit_albedo);
         }
 
@@ -207,7 +238,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             specular.rgb *= lerp(1.0, albedo, metalness);
         }
         else {
-            uint blockId = texDeferData[globalPos];
+            uint blockId = deferData.r;
             if (blockId == 1) {
                 // water
                 if (traceDist > 0.0 && ap.camera.fluid == 0) {

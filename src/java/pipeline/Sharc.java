@@ -13,6 +13,7 @@ public class Sharc {
     private static final int HASH_ENTRY_STRIDE_BYTES = 24;
     private static final int ACCUMULATION_ENTRY_STRIDE_BYTES = 16;
     private static final int RESOLVED_ENTRY_STRIDE_BYTES = 16;
+    private static final int UPDATE_TILE_SIZE = 4;
 
     private final Screen screen;
     private final int bucketCount;
@@ -36,8 +37,10 @@ public class Sharc {
     }
 
     public void render(StageList stage) {
-        var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
-        var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
+        // Update only samples one pixel per UPDATE_TILE_SIZE^2 block per frame,
+        // so dispatch is sized to that reduced grid instead of full render size.
+        var updateSizeX_16 = (int)Math.ceil(screen.renderWidth() / (float)UPDATE_TILE_SIZE / 16f);
+        var updateSizeY_16 = (int)Math.ceil(screen.renderHeight() / (float)UPDATE_TILE_SIZE / 16f);
 
         stage.compute("SHARC-Clear", "program/deferred/sharc-clear", "main")
             .exportInt("SHARC_BUCKET_COUNT", bucketCount)
@@ -45,7 +48,8 @@ public class Sharc {
 
         stage.compute("SHARC-Update", "program/deferred/sharc-update", "main")
             .exportInt("SHARC_BUCKET_COUNT", bucketCount)
-            .dispatch2D(sizeX_16, sizeY_16);
+            .exportInt("SHARC_UPDATE_TILE_SIZE", UPDATE_TILE_SIZE)
+            .dispatch2D(updateSizeX_16, updateSizeY_16);
 
         stage.compute("SHARC-Resolve", "program/deferred/sharc-resolve", "main")
             .exportInt("SHARC_BUCKET_COUNT", bucketCount)
