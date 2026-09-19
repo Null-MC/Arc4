@@ -17,6 +17,8 @@ import lib.pbr.material;
 import lib.ray_cone;
 
 
+static const int MaxRefractInterfaces = 1;
+
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float4> texSpecular_write;
 
@@ -63,8 +65,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         half4 specularMap = texDeferSpecular[globalPos];
 
-        float f0 = specularMap.g;
-        if (f0 == 0.0) f0 = 0.04;
+        float f0 = mat_f0(specularMap.g);
+        float ior_current = f0_to_ior(f0);
+        bool is_air = false;
 
         float3 albedo = transformer.fromGamma(color.rgb);
 
@@ -80,9 +83,15 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float alpha = roughness * roughness;
         if (!is_reflect) {
             // refract
-            float eta = ap.camera.fluid == 1
-                ? (1.333 / 1.0)
-                : (1.0 / 1.333);
+
+            if (color.a > 0.99) {
+                texSpecular_write[globalPos] = 0.0;
+                return;
+            }
+            
+            // float ior_near = ap.camera.fluid == 1 ? 1.333 : 1.0;
+            float ior_near = 1.0;
+            float eta = ior_near / ior_current;
 
             rayViewDir = refract(viewDir, viewNormal, eta);
 
@@ -110,38 +119,133 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
 
         uint2 deferData = texDeferData[globalPos];
-        float fWidth = asfloat(deferData.g);
-        var cone = RayCone.CreateFromGBuffer(fWidth);
+        // float fWidth = asfloat(deferData.g);
+        // var cone = RayCone.CreateFromGBuffer(fWidth);
 
         float3 rayDir = mul(float3x3(ap.camera.viewInv), rayViewDir);
         float3 sunDir = normalize(ap.celestial.sunPosition);
 
-        var query = HWRT.startQuery(
-            localPos + 0.002 * geo_normal,
-            rayDir,
-            0.0,
-            max(ap.world.renderDistance, 1.0),
-            HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-            HWRT.RTFlags.NONE);
-        
+        // Needed to weight the VNDF-sampled reflection by the Smith masking-shadowing ratio.
+        float NoL = max(dot(tex_normal, rayDir), 0.0);
+
+        HWRT.RTQuery query;
         float3 transmitColor = 1.0;
-        while (query.proceed()) {
-            let hit = query.getCandidate();
-            let surface = HWRT.decodeHit(hit);
-            float3 hit_localPos = surface.getPos();
+        if (MaxRefractInterfaces <= 1) {
+            // simple
+            query = HWRT.startQuery(
+                localPos,
+                rayDir,
+                0.002,
+                max(ap.world.renderDistance, 1.0),
+                HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+                HWRT.RTFlags.NONE);
 
-            let size = surface.albedo().getSize();
-            let cone2 = cone.Propagate(distance(localPos, hit_localPos));
-            var mip = cone2.CalculateMipLevel(size.z);
+            while (query.proceed()) {
+                let hit = query.getCandidate();
+                let hitType = hit.getGeometryIndex();
+                if (hitType == HWRT.RTGeometryIndex.SOLID) {
+                    query.acceptCandidate();
+                    break;
+                }
 
-            let hit_color = surface.albedo().sampleLevel(surface.getUV(), mip);// * surface.getColor();
+                let surface = HWRT.decodeHit(hit);
+                float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0);// * surface.getColor();
+
+                if (hitType == HWRT.RTGeometryIndex.CUTOUT && hit_color.a > 0.1) {
+                    query.acceptCandidate();
+                    break;
+                }
+
+                transmitColor *= transformer.fromGamma(hit_color.rgb);
+            }
+
+            if (query.hasHit()) {
+                let hit = query.getHit();
+                // TODO: handle the hit
+                query = HWRT.startQuery(
+                    localPos,
+                    rayDir,
+                    0.002,
+                    max(ap.world.renderDistance, 1.0),
+                    HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+                    HWRT.RTFlags.NONE);
+
+                transmitColor = 1.0;
+                while (query.proceed()) {
+                    let hit = query.getCandidate();
+                    let hitType = hit.getGeometryIndex();
+                    let surface = HWRT.decodeHit(hit);
+                    float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0);// * surface.getColor();
+
+                    transmitColor *= transformer.fromGamma(hit_color.rgb);
+                }
+            }
+        }
+        else {
+            // complex
+            query = HWRT.startQuery(
+                localPos,// - 0.002 * geo_normal,
+                rayDir,
+                0.002,
+                max(ap.world.renderDistance, 1.0),
+                HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+                HWRT.RTFlags.NONE);
             
-            if (hit_color.a >= 0.99) query.acceptCandidate();
-            else {
+            transmitColor = 1.0;
+            for (int i = 0; i < MaxRefractInterfaces; i++) {
+                while (query.proceed()) {
+                    let hit = query.getCandidate();
+                    let surface = HWRT.decodeHit(hit);
+                    float3 hit_localPos = surface.getPos();
+                    
+                    query.acceptCandidate();
+                }
+                
+                if (!query.hasHit() || i == MaxRefractInterfaces - 1) break;
+                
+                let hit = query.getHit();
+                if (hit.getGeometryIndex() != HWRT.RTGeometryIndex.TRANSLUCENT) break;
+
+                // bright red if hit any translucent surface
+                // texSpecular_write[globalPos] = float4(1000,0,0,1);
+                // return;
+
+                // TODO: ?
+                let surface = HWRT.decodeHit(hit);
+                float2 hit_uv = surface.getUV();
+                let hit_color = surface.albedo().sampleLevel(hit_uv, 0.0) * surface.getColor();
+                if (hit_color.a > 0.9) break;
+
                 float3 tint = transformer.fromGamma(hit_color.rgb);
-                tint *= 1.0 - hit_color.a;
+                // tint *= 1.0 - hit_color.a;
                 tint = lerp(1.0, tint, hit_color.a);
                 transmitColor *= tint;
+
+                float3 hit_localPos = surface.getPos();
+                float3 hit_localNormal = surface.getNormal();
+
+                // TODO: re-refract
+                half hit_specular_g = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0).g;
+                float hit_f0 = mat_f0(hit_specular_g);
+
+                float hit_ior = is_air ? f0_to_ior(hit_f0) : 1.0;
+                // float hit_eta = (is_air ? 1.0 : ior_current) / hit_ior;
+                float hit_eta = ior_current / hit_ior;
+
+                // if (dot(rayDir, hit_localNormal) < 0.0) hit_localNormal = -hit_localNormal;
+                if (is_air) hit_localNormal = -hit_localNormal;
+
+                rayDir = refract(rayDir, hit_localNormal, hit_eta);
+                ior_current = hit_ior;
+                is_air = !is_air;
+
+                query = HWRT.startQuery(
+                    hit_localPos,// + 0.002 * hit_localNormal,
+                    rayDir,
+                    0.002,
+                    max(ap.world.renderDistance, 1.0),
+                    HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+                    HWRT.RTFlags.NONE);
             }
         }
 
@@ -174,7 +278,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 moonLight = planet.sampleTransmit(hit_skyPos, moonDir);
             moonLight *= MoonColor * max(dot(hit_localNormal, moonDir), 0.0);
 
-            float3 hit_diffuse = sunLight + moonLight;
+            float3 hit_diffuse = (sunLight + moonLight) / PI;
             hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
 
             if (userSettings.Sharc_Enabled) {
@@ -192,12 +296,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             }
 
             float2 hit_uv = surface.getUV();
-            let size = surface.albedo().getSize();
-            let cone2 = cone.Propagate(distance(localPos, hit_localPos));
-            var mip = cone2.CalculateMipLevel(size.z);
+            // let size = surface.albedo().getSize();
+            // let cone2 = cone.Propagate(distance(localPos, hit_localPos));
+            // var mip = cone2.CalculateMipLevel(size.z);
 
-            float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, mip).rgb * surface.getColor().rgb;
-            hit_diffuse += mat_emission(blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, mip).a);
+            float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
+            hit_diffuse += mat_emission(blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0).a);
 
             specular.rgb = hit_diffuse * transformer.fromGamma(hit_albedo);
         }
@@ -216,10 +320,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 ? lazanyi_hcm[hcm]
                 : LazanyiF(lerp(f0, albedo, metalness));
 
-            F_NoV = L.F(NoV);
-            F_VoH = L.F(VoH);
-            
-            specular.rgb *= F_NoV;
+            // is_reflect was already chosen with probability F_s, so dividing by it here
+            // avoids re-applying Fresnel a second time on top of that selection frequency.
+            F_NoV = L.F(NoV) / max(F_s, 1e-3);
+            F_VoH = L.F(VoH) / max(F_s, 1e-3);
+
+            // VNDF importance sampling requires this visibility ratio to conserve energy.
+            float visibility = ggxG2OverG1(NoV, NoL, alpha);
+            specular.rgb *= F_NoV * visibility;
 
             specular.rgb += sampleDirectSun(
                 localPos,
@@ -235,7 +343,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             ) * SunColor;
 
             // albedo tinting
-            specular.rgb *= lerp(1.0, albedo, metalness);
+            specular.rgb *= lerp(1.0, sqrt(albedo), metalness);
+
+            // float smoothness = specularMap.r;
+            // specular.rgb *= smoothness;
         }
         else {
             uint blockId = deferData.r;
@@ -247,10 +358,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             }
             else {
                 // everything else
-                specular.rgb *= albedo;
+                specular.rgb *= lerp(1.0, albedo, color.a);
             }
 
-            specular.rgb *= 1.0 - color.a;
+            // specular.rgb *= 1.0 - color.a;
         }
     }
 
@@ -301,4 +412,10 @@ float3 sampleDirectSun(
     float3 sunRadiance = SunColor * planet.sampleTransmit(skyPos, sunDir);
 
     return sunRadiance * brdf * NoL * sunSolidAngle * shadow;
+}
+
+float f0_to_ior(const in float f0) {
+    // Convert reflectance at normal incidence (f0) to index of refraction (ior)
+    float sqrt_f0 = sqrt(f0);
+    return (1.0 + sqrt_f0) / (1.0 - sqrt_f0);
 }

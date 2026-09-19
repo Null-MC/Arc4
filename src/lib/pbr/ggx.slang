@@ -9,6 +9,16 @@ float ggxG1(const in float NoX, const in float alpha) {
     return 2.0 * NoX / max(denominator, 1e-5);
 }
 
+// Height-correlated Smith visibility ratio G2(NoV,NoL)/G1(NoV), i.e. the extra
+// masking-shadowing weight needed when a reflection direction was importance
+// sampled from the GGX VNDF (see Heitz 2018).
+float ggxG2OverG1(const in float NoV, const in float NoL, const in float alpha) {
+    float alphaSquared = alpha * alpha;
+    float lambdaV = (sqrt(alphaSquared + (1.0 - alphaSquared) * NoV * NoV) - NoV) / max(2.0 * NoV, 1e-5);
+    float lambdaL = (sqrt(alphaSquared + (1.0 - alphaSquared) * NoL * NoL) - NoL) / max(2.0 * NoL, 1e-5);
+    return (1.0 + lambdaV) / max(1.0 + lambdaV + lambdaL, 1e-5);
+}
+
 float3 sampleGGXVNDF(
     const in float3 viewDir,
     const in float3 normal,

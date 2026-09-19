@@ -65,7 +65,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 moonLight = planet.sampleTransmit(skyPos, moonDir);
         moonLight *= MoonColor * max(dot(tex_normal, moonDir), 0.0);
 
-        diffuse.rgb = half3(sunLight + moonLight);
+        diffuse.rgb = (sunLight + moonLight) / PI;
 
         diffuse.rgb *= SampleShadowDisc(globalPos, localPos, geo_normal);
 
@@ -98,7 +98,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             0.0,
             max(ap.world.renderDistance, 1.0),
             HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-            HWRT.RTFlags.NONE);
+            HWRT.RTFlags.USE_TWO_STATE_OMM);
         
         float3 transmitColor = 1.0;
         while (query.proceed()) {
@@ -125,7 +125,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (!query.hasHit()) {
             // sky
             float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
-            diffuse.rgb += PI * transmitColor * transformer.fromLinear(skyColor);
+            diffuse.rgb += transmitColor * transformer.fromLinear(skyColor);
         }
         else {
             // hit

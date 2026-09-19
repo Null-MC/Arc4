@@ -28,8 +28,8 @@ float3 _SampleShadow(const in float3 localPos, const in float3 geo_normal, const
         if (hit_color.a >= 0.99) query.acceptCandidate();
         else {
             float3 tint = transformer.fromGamma(hit_color.rgb);
-            tint *= 1.0 - hit_color.a;
-            // tint = lerp(1.0, tint, hit_color.a);
+            // tint *= 1.0 - hit_color.a;
+            tint = lerp(1.0, tint, hit_color.a);
             color *= tint;
         }
     }

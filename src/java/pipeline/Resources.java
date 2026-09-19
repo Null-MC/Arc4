@@ -81,13 +81,13 @@ public class Resources {
             .create();
 
         // if (pipeline.settings().getBoolValue("Accumulation")) {
-        //     diffuseHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
-        //         .renderSize()
-        //         .createEmpty();
+            diffuseHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
+                .renderSize()
+                .createEmpty();
             
-        //     depthHistory = new PingPongBufferBuilder2D(pipeline, "texDepthHistory", TextureFormat.R32_SFLOAT)
-        //         .renderSize()
-        //         .createEmpty();
+            depthHistory = new PingPongBufferBuilder2D(pipeline, "texDepthHistory", TextureFormat.R32_SFLOAT)
+                .renderSize()
+                .createEmpty();
         // }
 
         mainTexture_A = pipeline.texture2D("mainTexture_A", TextureFormat.RGBA16_SFLOAT)

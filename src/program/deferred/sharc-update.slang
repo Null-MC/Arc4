@@ -84,12 +84,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (bounce == 0 && is_sss) rayDir = -rayDir;
 
         var query = HWRT.startQuery(
-            pathPositions[bounce] + 0.04 * pathNormals[bounce],
+            pathPositions[bounce] + 0.002 * pathNormals[bounce],
             rayDir,
             0.0,
             max(ap.world.renderDistance, 1.0),
             HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-            HWRT.RTFlags.NONE);
+            HWRT.RTFlags.USE_TWO_STATE_OMM);
 
         float3 transmitColor = 1.0;
         while (query.proceed()) {
@@ -110,7 +110,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 skyPos = planet.getSkyPosition(pathPositions[bounce]);
             skyRadiance = planet.sampleView(skyPos, rayDir, sunDir);
             
-            skyRadiance = PI * transmitColor * transformer.fromLinear(skyRadiance);
+            skyRadiance = transmitColor * transformer.fromLinear(skyRadiance);
             terminatedInSky = true;
             break;
         }
@@ -144,7 +144,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             vertexRadiance += skyRadiance;
         }
         else if (index < int(pathLength) - 1) {
-            vertexRadiance += pathAlbedos[index + 1] * downstreamRadiance;
+            // Child's own Lambertian BRDF normalization, matching hit_albedo/PI at the consumer.
+            vertexRadiance += pathAlbedos[index + 1] * downstreamRadiance / PI;
         }
 
         sharcAccumulate(

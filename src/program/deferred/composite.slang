@@ -45,14 +45,11 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 diffuse = texDiffuse_read[globalPos];
         float4 specularMap = texDeferSpecular[globalPos];
 
-        float f0 = specularMap.g;
-        if (f0 == 0.0) f0 = 0.04;
+        float f0 = mat_f0(specularMap.g);
 
         float metalness = step(0.9, f0);
         float smoothness = specularMap.r;
         diffuse *= 1.0 - metalness;
-
-        diffuse *= rcp(PI);
 
         diffuse += mat_emission(specularMap.a);
 
@@ -60,7 +57,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         // TODO: add specular
         float3 specular = texSpecular_read[globalPos];
-        color.rgb += specular * smoothness;
+        color.rgb += specular;// * smoothness;
 
         if (ap.camera.fluid == 1) {
             float viewDist = length(viewPos);

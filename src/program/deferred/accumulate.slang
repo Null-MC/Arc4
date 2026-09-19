@@ -95,7 +95,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     }
 
     if (ap.timing.frameCounter > 0) {
-        float blendF = 1.0 / clamp(counter++, 1.0, MaxBlendFrames);
+        float blendF = 1.0 / clamp(++counter, 1.0, MaxBlendFrames);
         color_now = lerp(color_last.rgb, color_now, blendF);
     }
 
