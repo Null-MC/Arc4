@@ -4,6 +4,7 @@ import rt_pipeline;
 import lib.common;
 import lib.sharc;
 import lib.shadow;
+import lib.hemisphere;
 import lib.octohedral;
 import lib.noise.blue;
 import lib.sky.shared;
@@ -285,19 +286,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 hit_diffuse = (sunLight + moonLight) / PI;
             hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
 
-            if (userSettings.Sharc_Enabled) {
-                float sharcConfidence;
-                float3 sharcRadiance = sharcLookup(
-                    hit_localPos + ap.camera.position,
-                    hit_localNormal,
-                    sharcConfidence
-                );
-
-                // SHARC stores diffuse irradiance, so use it as a stable replacement
-                // for the direct hit lighting instead of adding it a second time.
-                float sharcWeight = sharcConfidence * 0.75;
-                hit_diffuse = lerp(hit_diffuse, sharcRadiance, sharcWeight);
-            }
+            // TODO: replace direct sharc lookup with an additional indirect trace
+            hit_diffuse += sampleIndirect(globalPos, hit_localPos, hit_localNormal);
 
             float2 hit_uv = surface.getUV();
             // let size = surface.albedo().getSize();
@@ -418,6 +408,78 @@ float3 sampleDirectSun(
     float3 sunRadiance = SunColor * planet.sampleTransmit(skyPos, sunDir);
 
     return sunRadiance * brdf * NoL * sunSolidAngle * shadow;
+}
+
+float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const in float3 localNormal) {
+    float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, 0, ap.timing.frameCounter);
+    float3 rayDir = sampleCosineWeightedHemisphere(rayNoise);
+    rayDir = transform_to_world(localNormal, rayDir);
+    
+    var query = HWRT.startQuery(
+        localPos + 0.002 * localNormal,
+        rayDir,
+        0.0,
+        max(ap.world.renderDistance, 1.0),
+        HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+        HWRT.RTFlags.USE_TWO_STATE_OMM);
+
+    float3 transmitColor = 1.0;
+    while (query.proceed()) {
+        let hit = query.getCandidate();
+        let hitType = hit.getGeometryIndex();
+
+        if (hitType == HWRT.RTGeometryIndex.SOLID) {
+            query.acceptCandidate();
+            break;
+        }
+
+        let surface = HWRT.decodeHit(hit);
+        float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
+
+        if (hitType == HWRT.RTGeometryIndex.CUTOUT && hit_color.a >= 0.1) {
+            query.acceptCandidate();
+            break;
+        }
+
+        float3 tint = transformer.fromGamma(hit_color.rgb);
+        tint *= 1.0 - hit_color.a;
+        // tint = lerp(1.0, tint, hit_color.a);
+        transmitColor *= tint;
+    }
+
+    float3 diffuse;
+    if (!query.hasHit()) {
+        // sky
+        float3 skyPos = planet.getSkyPosition(localPos);
+        float3 sunDir = normalize(ap.celestial.sunPosition);
+        float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+        diffuse = transformer.fromLinear(skyColor);
+    }
+    else {
+        // hit
+        var hit = query.getHit();
+        var surface = HWRT.decodeHit(hit);
+        float3 hit_localPos = surface.getPos();
+        float3 hit_localNormal = surface.getNormal();
+
+        // TODO
+        diffuse = 0.0;
+        if (userSettings.Sharc_Enabled) {
+            float sharcConfidence;
+            float3 sharcRadiance = sharcLookup(
+                hit_localPos + ap.camera.position,
+                hit_localNormal,
+                sharcConfidence
+            );
+
+            // SHARC stores diffuse irradiance, so use it as a stable replacement
+            // for the direct hit lighting instead of adding it a second time.
+            float sharcWeight = sharcConfidence * 0.75;
+            diffuse = lerp(diffuse, sharcRadiance, sharcWeight);
+        }
+    }
+
+    return diffuse * transmitColor;
 }
 
 float f0_to_ior(const in float f0) {

@@ -89,8 +89,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             rayBias = -rayBias;
         }
 
-        float fWidth = asfloat(texDeferData[globalPos].g);
-        var cone = RayCone.CreateFromGBuffer(fWidth);
+        // float fWidth = asfloat(texDeferData[globalPos].g);
+        // var cone = RayCone.CreateFromGBuffer(fWidth);
 
         var query = HWRT.startQuery(
             localPos + rayBias,
@@ -102,24 +102,30 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         
         float3 transmitColor = 1.0;
         while (query.proceed()) {
-            let hit = query.getCandidate();            
-            let surface = HWRT.decodeHit(hit);
-            float3 hit_localPos = surface.getPos();
-            float2 hit_uv = surface.getUV();
-
-            let size = surface.albedo().getSize();
-            let cone2 = cone.Propagate(distance(localPos, hit_localPos));
-            var mip = cone2.CalculateMipLevel(size.z);
-
-            float4 hit_color = surface.albedo().sampleLevel(hit_uv, mip) * surface.getColor();
-
-            if (hit_color.a >= 0.99) query.acceptCandidate();
-            else {
-                float3 tint = transformer.fromGamma(hit_color.rgb);
-                tint *= 1.0 - hit_color.a;
-                // tint = lerp(1.0, tint, hit_color.a);
-                transmitColor *= tint;
+            let hit = query.getCandidate();
+            let hitType = hit.getGeometryIndex();
+            if (hitType == HWRT.RTGeometryIndex.SOLID) {
+                query.acceptCandidate();
+                break;
             }
+
+            let surface = HWRT.decodeHit(hit);
+
+            // let size = surface.albedo().getSize();
+            // let cone2 = cone.Propagate(distance(localPos, hit_localPos));
+            // var mip = cone2.CalculateMipLevel(size.z);
+
+            float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
+
+            if (hitType == HWRT.RTGeometryIndex.CUTOUT && hit_color.a >= 0.1) {
+                query.acceptCandidate();
+                break;
+            }
+
+            float3 tint = transformer.fromGamma(hit_color.rgb);
+            tint *= 1.0 - hit_color.a;
+            // tint = lerp(1.0, tint, hit_color.a);
+            transmitColor *= tint;
         }
 
         if (!query.hasHit()) {
@@ -148,12 +154,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
 
             float2 hit_uv = surface.getUV();
-            let size = surface.albedo().getSize();
-            let cone2 = cone.Propagate(distance(localPos, hit_localPos));
-            var mip = cone2.CalculateMipLevel(size.z);
+            // let size = surface.albedo().getSize();
+            // let cone2 = cone.Propagate(distance(localPos, hit_localPos));
+            // var mip = cone2.CalculateMipLevel(size.z);
 
-            float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, mip).rgb * surface.getColor().rgb;
-            half4 hit_specularMap = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, mip);
+            float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
+            half4 hit_specularMap = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
             hit_diffuse += mat_emission(hit_specularMap);
 
             diffuse.rgb += hit_diffuse * transmitColor * transformer.fromGamma(hit_albedo);
