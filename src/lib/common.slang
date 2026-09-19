@@ -9,7 +9,7 @@ static const float PI = 3.1415926535897932384626433832795;
 
 static const float SamplingBias = -1.0;
 
-static const float3 WaterAbsorb = 1.0 - pow(float3(0.427, 0.827, 0.949), 2.2);
+static const float3 WaterAbsorb = float3(0.35, 0.07, 0.03);
 
 // static const ColorTransformer transformer = new sRGB_Transformer();
 static const ColorTransformer transformer = new ACES_Transformer();

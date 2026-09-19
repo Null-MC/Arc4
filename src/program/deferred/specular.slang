@@ -132,7 +132,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (MaxRefractInterfaces <= 1) {
             // simple
             query = HWRT.startQuery(
-                localPos,
+                localPos + (is_reflect ? 0.002 : -0.002) * geo_normal,
                 rayDir,
                 0.002,
                 max(ap.world.renderDistance, 1.0),
@@ -155,30 +155,33 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                     break;
                 }
 
-                transmitColor *= transformer.fromGamma(hit_color.rgb);
+                // transmitColor *= transformer.fromGamma(hit_color.rgb);
             }
 
-            if (query.hasHit()) {
-                let hit = query.getHit();
-                // TODO: handle the hit
-                query = HWRT.startQuery(
-                    localPos,
-                    rayDir,
-                    0.002,
-                    max(ap.world.renderDistance, 1.0),
-                    HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-                    HWRT.RTFlags.NONE);
+            // if (query.hasHit()) {
+            //     let hit = query.getHit();
+            //     var hit_surface = HWRT.decodeHit(hit);
+            //     float3 hit_localPos = hit_surface.getPos();
+            //     float hitDist = distance(localPos, hit_localPos);
 
-                transmitColor = 1.0;
-                while (query.proceed()) {
-                    let hit = query.getCandidate();
-                    let hitType = hit.getGeometryIndex();
-                    let surface = HWRT.decodeHit(hit);
-                    float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0);// * surface.getColor();
+            //     var tint_query = HWRT.startQuery(
+            //         localPos,
+            //         rayDir,
+            //         0.002,
+            //         hitDist,
+            //         HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+            //         HWRT.RTFlags.NONE);
 
-                    transmitColor *= transformer.fromGamma(hit_color.rgb);
-                }
-            }
+            //     transmitColor = 1.0;
+            //     while (tint_query.proceed()) {
+            //         let tint_hit = tint_query.getCandidate();
+            //         let tint_hitType = tint_hit.getGeometryIndex();
+            //         let tint_surface = HWRT.decodeHit(tint_hit);
+            //         float4 hit_color = tint_surface.albedo().sampleLevel(tint_surface.getUV(), 0.0);// * surface.getColor();
+
+            //         transmitColor *= transformer.fromGamma(hit_color.rgb);
+            //     }
+            // }
         }
         else {
             // complex
