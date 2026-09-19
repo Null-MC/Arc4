@@ -42,22 +42,22 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         if (userSettings.Debug_WhiteWorld) albedo = 1.0;
 
-        float3 diffuse = texDiffuse_read[globalPos];
-        float4 specularMap = texDeferSpecular[globalPos];
+        float3 diffuseLight = texDiffuse_read[globalPos];
+        half4 specularMap = texDeferSpecular[globalPos];
 
-        float f0 = mat_f0(specularMap.g);
+        float f0 = SpecularReader.f0(specularMap);
+        float metalness = SpecularReader.metalness(specularMap);
 
-        float metalness = step(0.9, f0);
-        float smoothness = specularMap.r;
-        diffuse *= 1.0 - metalness;
+        // float smoothness = specularMap.r;
+        diffuseLight *= 1.0 - metalness;
 
-        diffuse += mat_emission(specularMap.a);
+        diffuseLight += mat_emission(specularMap);
 
-        color.rgb = albedo * diffuse * color.a;
+        color.rgb = albedo * diffuseLight * color.a;
 
         // TODO: add specular
-        float3 specular = texSpecular_read[globalPos];
-        color.rgb += specular;// * smoothness;
+        float3 specularLight = texSpecular_read[globalPos];
+        color.rgb += specularLight;// * smoothness;
 
         if (ap.camera.fluid == 1) {
             float viewDist = length(viewPos);
@@ -92,27 +92,22 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         // sky
         float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
-        float3 sunDir = normalize(ap.celestial.sunPosition);
-
         float3 skyPos = planet.getSkyPosition(0.0);
         float3 localViewDir = normalize(localPos);
         color.rgb = 0.0h;
 
         if (planet.rayIntersectsGround(skyPos, localViewDir) <= 0.0) {
-            float3 moonDir = normalize(ap.celestial.moonPosition);
-            // half3 skyTransmit = planet.sampleTransmit(skyPos, localViewDir);
-
+            float3 sunDir = normalize(ap.celestial.sunPosition);
             float3 sunLight = renderSun(localViewDir, sunDir) * SunColor;
-            // half3 sunTransmit = planet.sampleTransmit(skyPos, sunDir);
-            color.rgb += sunLight;// * sunTransmit;
 
+            float3 moonDir = normalize(ap.celestial.moonPosition);
             float3 moonLight = renderMoon(localViewDir, moonDir) * MoonColor;
-            // half3 moonTransmit = planet.sampleTransmit(skyPos, moonDir);
-            color.rgb += moonLight;// * moonTransmit;
-        }
 
-        float3 transmit = planet.sampleTransmit(skyPos, localViewDir);
-        color.rgb *= transformer.fromLinear(transmit);
+            color.rgb = sunLight + moonLight;
+
+            float3 transmit = planet.sampleTransmit(skyPos, localViewDir);
+            color.rgb *= transformer.fromLinear(transmit);
+        }
     }
 
     color.rgb = clamp(color.rgb, 0.0, half.maxValue);

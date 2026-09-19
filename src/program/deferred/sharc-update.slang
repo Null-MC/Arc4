@@ -55,7 +55,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 sunDir = normalize(ap.celestial.sunPosition);
 
     half4 specularMap = texDeferSpecular[globalPos];
-    float sss = mat_sss_lab(specularMap.b);
+    float sss = SpecularReader.sss(specularMap);
 
     float sssDither = BlueNoise::sampleAnimated1D(globalPos, 1, ap.timing.frameCounter);
     bool is_sss = sss > sssDither;
@@ -125,7 +125,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
         half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
         pathAlbedos[pathLength] = transmitColor * transformer.fromGamma(hit_albedo);
-        pathEmissions[pathLength] = mat_emission(hit_specular.a);
+        pathEmissions[pathLength] = mat_emission(hit_specular);
 
         pathLength++;
     }

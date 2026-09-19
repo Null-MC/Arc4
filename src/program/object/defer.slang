@@ -57,9 +57,13 @@ struct DeferShader : Shader<VertexData, FragmentData> {
     static FragmentData shadeSurface(PixelData objectData, VertexData input) {
         half4 color = half4(input.color);
         half fWidth = 0.0h;
+        float lod = 0.0;
 
         if (let texAlbedo = objectData.albedo()) {
-            color *= half4(texAlbedo.sampleBias(input.uv, -1.0));
+            lod = texAlbedo.getLOD(input.uv);
+            lod = max(lod + SamplingBias, 0.0);
+
+            color *= half4(texAlbedo.sampleLevel(input.uv, lod));
 
             int3 size = texAlbedo.getSize();
             // float2 dX = ddx(input.uv) * size.xy;
@@ -75,9 +79,8 @@ struct DeferShader : Shader<VertexData, FragmentData> {
         float3 tex_normal = geo_normal;
 
         if (let texNormalMap = objectData.normal()) {
-            float shit = lengthSq(input.tangent);
             if (any(input.tangent != 0.0)) {
-                float4 normalData = texNormalMap.sampleTexture(input.uv);
+                float4 normalData = texNormalMap.sampleLevel(input.uv, lod);
 
                 if (any(normalData.xy != 1.0)) {
                     float3x3 tbn;
@@ -95,14 +98,14 @@ struct DeferShader : Shader<VertexData, FragmentData> {
 
         half4 specular = 0.0h;
         if (let texSpecularMap = objectData.specular()) {
-            specular = half4(texSpecularMap.sampleTexture(input.uv));
+            specular = half4(texSpecularMap.sampleLevel(input.uv, lod));
         }
 
         if (input.blockId == 1) {
             // water
-            if (all(specular.rg == 0.0)) {
-                specular.rg = half2(1.0h, 0.02h);
-            }
+            color = 0.0h;
+            tex_normal = geo_normal;
+            specular = half4(1.0h, 0.02h, 0.0h, 0.0h);
         }
 
         if (!IsTranslucent) color.a = 1.0h;

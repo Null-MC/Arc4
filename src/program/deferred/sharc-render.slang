@@ -68,7 +68,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (dot(rayDir, geo_normal) < 0.0) rayDir = -rayDir;
 
         half4 specularMap = texDeferSpecular[globalPos];
-        float sss = mat_sss_lab(specularMap.b);
+        float sss = SpecularReader.sss(specularMap);
         
         float sssDither = BlueNoise::sampleAnimated1D(globalPos, 1, ap.timing.frameCounter);
         bool is_sss = sss > sssDither;
@@ -137,7 +137,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float2 hit_uv = surface.getUV();
             float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
             half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
-            hitDiffuse += mat_emission(hit_specular.a);
+            hitDiffuse += mat_emission(hit_specular);
             
             diffuse.rgb += hitDiffuse * transformer.fromGamma(hit_albedo);
         }

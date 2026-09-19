@@ -65,9 +65,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         half4 specularMap = texDeferSpecular[globalPos];
 
-        float f0 = mat_f0(specularMap.g);
+        float f0 = SpecularReader.f0(specularMap);
         float ior_current = f0_to_ior(f0);
-        bool is_air = false;
 
         float3 albedo = transformer.fromGamma(color.rgb);
 
@@ -79,7 +78,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         bool is_reflect = F_s >= dither;
 
         float3 rayViewDir;
-        float roughness = max(1.0 - specularMap.r, 0.001);
+        float roughness = SpecularReader.roughness(specularMap);
         float alpha = roughness * roughness;
         if (!is_reflect) {
             // refract
@@ -183,6 +182,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
         else {
             // complex
+            bool is_air = false;
+
             query = HWRT.startQuery(
                 localPos,// - 0.002 * geo_normal,
                 rayDir,
@@ -225,8 +226,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 float3 hit_localNormal = surface.getNormal();
 
                 // TODO: re-refract
-                half hit_specular_g = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0).g;
-                float hit_f0 = mat_f0(hit_specular_g);
+                half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
+                float hit_f0 = SpecularReader.f0(hit_specular);
 
                 float hit_ior = is_air ? f0_to_ior(hit_f0) : 1.0;
                 // float hit_eta = (is_air ? 1.0 : ior_current) / hit_ior;
@@ -301,7 +302,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             // var mip = cone2.CalculateMipLevel(size.z);
 
             float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
-            hit_diffuse += mat_emission(blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0).a);
+            half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
+            hit_diffuse += mat_emission(hit_specular);
 
             specular.rgb = hit_diffuse * transformer.fromGamma(hit_albedo);
         }
@@ -309,8 +311,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         specular.rgb *= transmitColor;
 
         if (is_reflect) {
-            int hcm = int(floor(f0 * 255.0 - 229.5));
-            float metalness = step(0.9, f0);
+            int hcm = SpecularReader.hcm(specularMap);
+            float metalness = SpecularReader.metalness(specularMap);
 
             float3 halfDir = normalize(localViewDir + sunDir);
             float VoH = max(dot(localViewDir, halfDir), 0.0);
@@ -345,6 +347,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             // albedo tinting
             specular.rgb *= lerp(1.0, sqrt(albedo), metalness);
 
+            // TODO: THis should not exist!
             // float smoothness = specularMap.r;
             // specular.rgb *= smoothness;
         }

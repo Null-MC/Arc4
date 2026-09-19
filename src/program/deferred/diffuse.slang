@@ -78,7 +78,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (dot(rayDir, geo_normal) < 0.0) rayDir = -rayDir;
 
         half4 specularMap = texDeferSpecular[globalPos];
-        float sss = mat_sss_lab(specularMap.b);
+        float sss = SpecularReader.sss(specularMap);
 
         float sssDither = BlueNoise::sampleAnimated1D(globalPos, 1, ap.timing.frameCounter);
         bool is_sss = sss > sssDither;
@@ -153,7 +153,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             var mip = cone2.CalculateMipLevel(size.z);
 
             float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, mip).rgb * surface.getColor().rgb;
-            hit_diffuse += mat_emission(blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, mip).a);
+            half4 hit_specularMap = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, mip);
+            hit_diffuse += mat_emission(hit_specularMap);
 
             diffuse.rgb += hit_diffuse * transmitColor * transformer.fromGamma(hit_albedo);
         }
