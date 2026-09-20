@@ -2,6 +2,7 @@ package pipeline;
 
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.Screen;
+import dev.irisshaders.aperture.api.objects.Texture2D;
 import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
 
 public class Sharc {
@@ -23,10 +24,12 @@ public class Sharc {
         this.screen = screen;
 
         int pixelCount = screen.renderWidth() * screen.renderHeight();
+        
         bucketCount = nextPowerOfTwo(clamp(
             (pixelCount + PIXELS_PER_BUCKET - 1) / PIXELS_PER_BUCKET,
             Math.max(MIN_BUCKET_COUNT, CASCADE_COUNT),
             MAX_BUCKET_COUNT));
+        
         if (bucketCount % CASCADE_COUNT != 0) {
             throw new IllegalStateException("SHARC bucket count must divide evenly across cascades");
         }
@@ -36,24 +39,32 @@ public class Sharc {
         pipeline.buffer("sharcResolved", bucketCount * RESOLVED_ENTRY_STRIDE_BYTES);
     }
 
-    public void render(StageList stage) {
+    public void render(StageList stage, Texture2D diffuseWriter) {
         // Update only samples one pixel per UPDATE_TILE_SIZE^2 block per frame,
         // so dispatch is sized to that reduced grid instead of full render size.
         var updateSizeX_16 = (int)Math.ceil(screen.renderWidth() / (float)UPDATE_TILE_SIZE / 16f);
         var updateSizeY_16 = (int)Math.ceil(screen.renderHeight() / (float)UPDATE_TILE_SIZE / 16f);
 
-        stage.compute("SHARC-Clear", "program/deferred/sharc-clear", "main")
+        stage.compute("SHARC-Clear", "program/deferred/sharc/clear", "main")
             .exportInt("SHARC_BUCKET_COUNT", bucketCount)
             .dispatch1D((int)Math.ceil(bucketCount / (float)THREADS_1D));
 
-        stage.compute("SHARC-Update", "program/deferred/sharc-update", "main")
+        stage.compute("SHARC-Update", "program/deferred/sharc/update", "main")
             .exportInt("SHARC_BUCKET_COUNT", bucketCount)
             .exportInt("SHARC_UPDATE_TILE_SIZE", UPDATE_TILE_SIZE)
             .dispatch2D(updateSizeX_16, updateSizeY_16);
 
-        stage.compute("SHARC-Resolve", "program/deferred/sharc-resolve", "main")
+        stage.compute("SHARC-Resolve", "program/deferred/sharc/resolve", "main")
             .exportInt("SHARC_BUCKET_COUNT", bucketCount)
             .dispatch1D((int)Math.ceil(bucketCount / (float)THREADS_1D));
+
+        var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
+        var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
+
+        stage.compute("Deferred-SHaRC-Render", "program/deferred/sharc/render", "main")
+            .overrideObject("texDiffuse_write", diffuseWriter.name())
+            .exportInt("SHARC_BUCKET_COUNT", bucketCount)
+            .dispatch2D(sizeX_16, sizeY_16);
     }
 
     public int bucketCount() {

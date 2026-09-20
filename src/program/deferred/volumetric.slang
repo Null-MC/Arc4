@@ -142,7 +142,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 color = texMain_read[globalPos];
 
-    color = color * transmittance + scattering;
+    // color = color * transmittance + scattering;
 
     color = clamp(color, 0.0, half.maxValue);
 

@@ -88,25 +88,25 @@ public class ReBLUR {
         var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
         var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
 
-        stage.compute("ReBLUR-Temporal", "program/deferred/reblur-temporal", "main")
+        stage.compute("ReBLUR-Temporal", "program/deferred/reblur/temporal", "main")
             .overrideObject("texDiffuse_read", rawDiffuseReaderName)
             .overrideObject("texAccumColor_write", texAccumColor.name())
             .overrideObject("texAccumData_write", texAccumData.name())
             .dispatch2D(sizeX_16, sizeY_16);
 
-        stage.compute("ReBLUR-Blur", "program/deferred/reblur-blur", "main")
+        stage.compute("ReBLUR-Blur", "program/deferred/reblur/blur", "main")
             .overrideObject("texAccumColor_read", texAccumColor.name())
             .overrideObject("texAccumData_read", texAccumData.name())
             .overrideObject("texBlur_write", texBlur.name())
             .dispatch2D(sizeX_16, sizeY_16);
 
-        stage.compute("ReBLUR-PostBlur", "program/deferred/reblur-postblur", "main")
+        stage.compute("ReBLUR-PostBlur", "program/deferred/reblur/postblur", "main")
             .overrideObject("texBlur_read", texBlur.name())
             .overrideObject("texAccumData_read", texAccumData.name())
             .overrideObject("texPostBlur_write", texPostBlur.name())
             .dispatch2D(sizeX_16, sizeY_16);
 
-        stage.compute("ReBLUR-Stabilize", "program/deferred/reblur-stabilize", "main")
+        stage.compute("ReBLUR-Stabilize", "program/deferred/reblur/stabilize", "main")
             .overrideObject("texPostBlur_read", texPostBlur.name())
             .overrideObject("texAccumData_read", texAccumData.name())
             .overrideObject("texFinal_write", texFinal.name())

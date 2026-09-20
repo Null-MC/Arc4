@@ -32,6 +32,7 @@ internal extern static const bool value_Bloom_Enabled;
 internal extern static const bool value_Debug_Exposure;
 internal extern static const bool value_Debug_SkyLuts;
 internal extern static const bool value_Debug_SpecularEnabled;
+internal extern static const bool value_Reblur_Enabled;
 internal extern static const bool value_Sharc_Enabled;
 internal extern static const bool value_TAA_Enabled;
 
@@ -58,6 +59,7 @@ struct Settings {
     static const bool Debug_Exposure = value_Debug_Exposure;
     static const bool Debug_SkyLuts = value_Debug_SkyLuts;
     static const bool Debug_SpecularEnabled = value_Debug_SpecularEnabled;
+    static const bool Reblur_Enabled = value_Reblur_Enabled;
     static const bool Sharc_Enabled = value_Sharc_Enabled;
     static const bool TAA_Enabled = value_TAA_Enabled;
 };

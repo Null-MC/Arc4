@@ -43,7 +43,10 @@ public class main implements ShaderPack {
         sky = new HillaireSky(pipeline);
         exposure = new Exposure(screen, pipeline);
         froxels = new Froxels(screen, pipeline);
-        reblur = new ReBLUR(screen, pipeline);
+
+        if (settings.getBoolValue("Reblur_Enabled")) {
+            reblur = new ReBLUR(screen, pipeline);
+        }
 
         // if (settings.getBoolValue("Sharc_Enabled")) {
             sharc = new Sharc(screen, pipeline);
@@ -87,12 +90,7 @@ public class main implements ShaderPack {
             froxels.render(stage);
             
             if (settings.getBoolValue("Sharc_Enabled")) {
-                sharc.render(stage);
-
-                stage.compute("Deferred-SHaRC-Render", "program/deferred/sharc-render", "main")
-                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
-                    .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
-                    .dispatch2D(sizeX_16, sizeY_16);
+                sharc.render(stage, diffuseFlipper.getWriter());
             }
             else {
                 stage.compute("Deferred-Diffuse", "program/deferred/diffuse", "main")
@@ -143,6 +141,11 @@ public class main implements ShaderPack {
 
                 mainFlipper.flip();
             }
+        });
+
+        withStage(pipeline, ProgramStage.POST_UPSCALE, stage -> {
+            var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
+            var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
 
             if (bloom != null) {
                 bloom.render(stage, mainFlipper.getReader());
