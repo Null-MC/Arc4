@@ -12,6 +12,7 @@ import lib.sky.transmit;
 import lib.sky.view;
 import lib.ray_cone;
 import lib.pbr.material;
+import lib.reblur;
 
 
 [[vk::image_format("rgba16f")]]
@@ -46,9 +47,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
-    if (depth > 0.0) {
-        diffuse.a = 1.0;
+    float hitDistance = ap.world.renderDistance;
 
+    if (depth > 0.0) {
         half4 normalData = texDeferNormal[globalPos];
         float3 geo_normal = octohedral::decode(normalData.xy);
         float3 tex_normal = octohedral::decode(normalData.zw);
@@ -140,6 +141,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 hit_localPos = surface.getPos();
             float3 hit_localNormal = surface.getNormal();
 
+            hitDistance = distance(localPos, hit_localPos);
+
             float3 hit_skyPos = planet.getSkyPosition(hit_localPos);
 
             float3 sunLight = SunColor * planet.sampleTransmit(hit_skyPos, sunDir);
@@ -164,6 +167,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             diffuse.rgb += hit_diffuse * transmitColor * transformer.fromGamma(hit_albedo);
         }
+
+        diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
     }
 
     texDiffuse_write[globalPos] = diffuse;

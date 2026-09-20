@@ -11,6 +11,7 @@ import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.view;
+import lib.reblur;
 
 
 [[vk::image_format("rgba16f")]]
@@ -40,9 +41,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
-    if (depth > 0.0) {
-        diffuse.a = 1.0;
+    float hitDistance = ap.world.renderDistance;
 
+    if (depth > 0.0) {
         half4 normalData = texDeferNormal[globalPos];
         float3 geo_normal = octohedral::decode(normalData.xy);
         float3 tex_normal = octohedral::decode(normalData.zw);
@@ -114,6 +115,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 hit_localPos = surface.getPos();
             float3 hit_localNormal = surface.getNormal();
 
+            hitDistance = distance(localPos, hit_localPos);
+
             float3 hit_skyPos = planet.getSkyPosition(hit_localPos);
             float3 sunLight = planet.sampleTransmit(hit_skyPos, sunDir) * SunColor;
             float3 moonLight = planet.sampleTransmit(hit_skyPos, moonDir) * MoonColor;
@@ -143,6 +146,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
 
         diffuse.rgb *= transmitColor;
+
+        diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
     }
 
     diffuse.rgb = clamp(diffuse.rgb, 0.0, half.maxValue);

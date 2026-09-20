@@ -11,6 +11,7 @@ import pipeline.BlockMap;
 import pipeline.Bloom;
 import pipeline.Exposure;
 import pipeline.HillaireSky;
+import pipeline.ReBLUR;
 import pipeline.Resources;
 import pipeline.Sharc;
 import lib.Flipper;
@@ -22,9 +23,9 @@ public class main implements ShaderPack {
     private Froxels froxels;
     private Bloom bloom;
     private Sharc sharc;
+    private ReBLUR reblur;
     private Resources resources;
     private Flipper<Texture2D> mainFlipper;
-    private Flipper<Texture2D> diffuseFlipper;
     private Flipper<Texture2D> specularFlipper;
     private BlockMap blocks = new BlockMap();
 
@@ -34,13 +35,13 @@ public class main implements ShaderPack {
         var settings = pipeline.settings();
         resources = new Resources(screen, pipeline);
 
-        diffuseFlipper = new Flipper<Texture2D>(resources.texDiffuse_A, resources.texDiffuse_B);
         specularFlipper = new Flipper<Texture2D>(resources.texSpecular_A, resources.texSpecular_B);
         mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
 
         sky = new HillaireSky(pipeline);
         exposure = new Exposure(screen, pipeline);
         froxels = new Froxels(screen, pipeline);
+        reblur = new ReBLUR(screen, pipeline);
 
         // if (settings.getBoolValue("Sharc_Enabled")) {
             sharc = new Sharc(screen, pipeline);
@@ -87,17 +88,15 @@ public class main implements ShaderPack {
                 sharc.render(stage);
 
                 stage.compute("Deferred-SHaRC-Render", "program/deferred/sharc-render", "main")
-                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                     .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
                     .dispatch2D(sizeX_16, sizeY_16);
             }
             else {
                 stage.compute("Deferred-Diffuse", "program/deferred/diffuse", "main")
-                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                     .dispatch2D(sizeX_16, sizeY_16);
             }
 
-            diffuseFlipper.flip();
+            reblur.render(stage);
             
             if (settings.getBoolValue("Debug_SpecularEnabled")) {
                 stage.compute("Deferred-Specular", "program/deferred/specular", "main")
@@ -109,16 +108,8 @@ public class main implements ShaderPack {
             }
 
             
-            stage.compute("Accumulate-Diffuse", "program/deferred/accumulate", "main")
-                .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
-                .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
-                .dispatch2D(sizeX_16, sizeY_16);
-
-            diffuseFlipper.flip();
-
-
             stage.compute("Deferred-Composite", "program/deferred/composite", "main")
-                .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
+                .overrideObject("texDiffuse_read", "texReblurStable_read")
                 .overrideObject("texSpecular_read", specularFlipper.getReader().name())
                 .overrideObject("texMain_write", mainFlipper.getWriter().name())
                 .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())

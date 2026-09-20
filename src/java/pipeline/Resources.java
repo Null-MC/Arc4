@@ -22,8 +22,6 @@ public class Resources {
     public final Texture2D texDeferSpecular;
     public final Texture2D texDeferData;
 
-    public final Texture2D texDiffuse_A;
-    public final Texture2D texDiffuse_B;
     public final Texture2D texSpecular_A;
     public final Texture2D texSpecular_B;
 
@@ -32,8 +30,6 @@ public class Resources {
 
     public final MappedBuffer<SceneBuffer> bufferScene;
 
-    public PingPongBuffer2D diffuseHistory;
-    public PingPongBuffer2D depthHistory;
     public PingPongBuffer2D taaHistory;
     
 
@@ -64,14 +60,6 @@ public class Resources {
             .renderSize()
             .create();
 
-        texDiffuse_A = pipeline.texture2D("texDiffuse_A", TextureFormat.RGBA16_SFLOAT)
-            .renderSize()
-            .create();
-
-        texDiffuse_B = pipeline.texture2D("texDiffuse_B", TextureFormat.RGBA16_SFLOAT)
-            .renderSize()
-            .create();
-
         texSpecular_A = pipeline.texture2D("texSpecular_A", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
             .create();
@@ -79,16 +67,6 @@ public class Resources {
         texSpecular_B = pipeline.texture2D("texSpecular_B", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
             .create();
-
-        // if (pipeline.settings().getBoolValue("Accumulation")) {
-            diffuseHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
-                .renderSize()
-                .createEmpty();
-            
-            depthHistory = new PingPongBufferBuilder2D(pipeline, "texDepthHistory", TextureFormat.R32_SFLOAT)
-                .renderSize()
-                .createEmpty();
-        // }
 
         mainTexture_A = pipeline.texture2D("mainTexture_A", TextureFormat.RGBA16_SFLOAT)
             .windowSize()
@@ -110,8 +88,6 @@ public class Resources {
     public void update(FrameState state) {
         bufferScene.write(SceneBuffer.Build(state, screen));
         
-        if (diffuseHistory != null) diffuseHistory.flip();
-        if (depthHistory != null) depthHistory.flip();
         if (taaHistory != null) taaHistory.flip();
     }
 }
