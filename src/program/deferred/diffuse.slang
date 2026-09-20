@@ -72,7 +72,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         // diffuse.rgb = 0.0h;
 
-        float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, 0, ap.timing.frameCounter);
+        // sample index 2: index 0 is used by SampleShadowDisc, 1 by the SSS dither below.
+        float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, 2, ap.timing.frameCounter);
         float3 rayDir = sampleCosineWeightedHemisphere(rayNoise);
         rayDir = transform_to_world(tex_normal, rayDir);
 

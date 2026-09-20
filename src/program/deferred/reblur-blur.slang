@@ -6,11 +6,11 @@ import lib.noise.blue;
 
 
 static const float BlurRadiusPixels = 24.0;
-static const float MaxAccumulatedFrames = 32.0;
+static const float MaxAccumulatedFrames = 64.0;
 static const int TapCount = 8;
 
-Texture2D<float3> texReblurColor_read;
-Texture2D<float4> texReblurData_read;
+Texture2D<float3> texAccumColor_read;
+Texture2D<float4> texAccumData_read;
 Texture2D<half4> texDeferNormal;
 
 [[vk::image_format("rgba16f")]]
@@ -24,7 +24,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float depth = ap.depth[globalPos];
     if (depth <= 0.0) {
-        texBlur_write[globalPos] = texReblurColor_read[globalPos];
+        texBlur_write[globalPos] = texAccumColor_read[globalPos];
         return;
     }
 
@@ -36,14 +36,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 normal = octohedral::decode(normalData.xy);
     float3 viewNormal = mul(float3x3(ap.camera.view), normal);
 
-    float4 centerData = texReblurData_read[globalPos];
+    float4 centerData = texAccumData_read[globalPos];
     float frameCount = centerData.b;
     float normHitDist = centerData.a;
 
     float radius = ReBLUR::computeBlurRadius(BlurRadiusPixels, frameCount, MaxAccumulatedFrames, normHitDist);
     float rotation = BlueNoise::sampleAnimated1D(globalPos, 2, ap.timing.frameCounter) * (2.0 * PI);
 
-    float3 colorSum = texReblurColor_read[globalPos];
+    float3 colorSum = texAccumColor_read[globalPos];
     float weightSum = 1.0;
 
     for (int i = 0; i < TapCount; i++) {
@@ -65,7 +65,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float weight = ReBLUR::computeEdgeWeight(viewPos, viewNormal, tapViewPos, tapViewNormal);
         if (weight <= 1e-4) continue;
 
-        colorSum += texReblurColor_read[tapPos] * weight;
+        colorSum += texAccumColor_read[tapPos] * weight;
         weightSum += weight;
     }
 

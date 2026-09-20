@@ -4,6 +4,10 @@ import lib.common;
 
 extern static const float TAA_RejectionStrength = 0.1;
 extern static const int TAA_MaxAccumFrames = 8;
+// Still-accumulation cap for userSettings.Accumulation: 666 frames (~11s at 60fps) plateaus the
+// blend weight at 1/667 long before GI/specular noise is actually resolved; float32 history has
+// exact-integer headroom well past this, so let it run far longer before flattening out.
+static const float TAA_MaxStillAccumFrames = 65536.0;
 static const uint groupResX = 16;
 static const uint groupResY = 16;
 
@@ -94,8 +98,8 @@ void main(ComputeInput input) {
 
         float mixRate = TAA_MaxAccumFrames;//clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
         if (userSettings.Accumulation) {
-            mixRate = clamp(lastColor.a, 0.0, 666.0);
-            if (!all(ap.camera.position == ap.temporal.position) || !all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) mixRate = min(mixRate, 8.0);
+            mixRate = clamp(lastColor.a, 0.0, TAA_MaxStillAccumFrames);
+            if (!all(ap.camera.position == ap.temporal.position) || !all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) mixRate = 0;//min(mixRate, 8.0);
         }
         if (!all(saturate(uv_prev) == uv_prev)) mixRate = 0.0;
 

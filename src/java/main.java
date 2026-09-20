@@ -26,6 +26,7 @@ public class main implements ShaderPack {
     private ReBLUR reblur;
     private Resources resources;
     private Flipper<Texture2D> mainFlipper;
+    private Flipper<Texture2D> diffuseFlipper;
     private Flipper<Texture2D> specularFlipper;
     private BlockMap blocks = new BlockMap();
 
@@ -37,6 +38,7 @@ public class main implements ShaderPack {
 
         specularFlipper = new Flipper<Texture2D>(resources.texSpecular_A, resources.texSpecular_B);
         mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
+        diffuseFlipper = new Flipper<Texture2D>(resources.texDiffuse_A, resources.texDiffuse_B);
 
         sky = new HillaireSky(pipeline);
         exposure = new Exposure(screen, pipeline);
@@ -88,15 +90,21 @@ public class main implements ShaderPack {
                 sharc.render(stage);
 
                 stage.compute("Deferred-SHaRC-Render", "program/deferred/sharc-render", "main")
+                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                     .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
                     .dispatch2D(sizeX_16, sizeY_16);
             }
             else {
                 stage.compute("Deferred-Diffuse", "program/deferred/diffuse", "main")
+                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                     .dispatch2D(sizeX_16, sizeY_16);
             }
 
-            reblur.render(stage);
+            diffuseFlipper.flip();
+
+            if (reblur != null) {
+                reblur.render(stage, diffuseFlipper.getReader().name());
+            }
             
             if (settings.getBoolValue("Debug_SpecularEnabled")) {
                 stage.compute("Deferred-Specular", "program/deferred/specular", "main")
@@ -109,7 +117,7 @@ public class main implements ShaderPack {
 
             
             stage.compute("Deferred-Composite", "program/deferred/composite", "main")
-                .overrideObject("texDiffuse_read", "texReblurStable_read")
+                .overrideObject("texDiffuse_read", reblur != null ? reblur.resultName() : diffuseFlipper.getReader().name())
                 .overrideObject("texSpecular_read", specularFlipper.getReader().name())
                 .overrideObject("texMain_write", mainFlipper.getWriter().name())
                 .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
@@ -183,6 +191,7 @@ public class main implements ShaderPack {
         rendererConfig.setSunPathRotation(settings.getFloatValue("SunAngle"));
 
         resources.update(state);
+        if (reblur != null) reblur.update();
         froxels.update();
         sky.update();
     }

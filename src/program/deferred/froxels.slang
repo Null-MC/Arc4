@@ -51,7 +51,7 @@ void main(ComputeInput input) {
     // float3 skyLightDir = normalize(ap.celestial.position);
     float3 shadowF = SampleShadow(localPos, 0.0);
 
-    float dither = hash13(seed);
+    // float dither = hash13(seed);
 
     float3 skyPos = planet.getSkyPosition(localPos);
 

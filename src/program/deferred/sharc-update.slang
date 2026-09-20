@@ -65,6 +65,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 pathShadingNormals[4];
     float3 pathAlbedos[4];
     float  pathEmissions[4];
+    bool  pathSss[4];
     uint pathLength = 1u;
     bool terminatedInSky = false;
     float3 skyRadiance = 0.0;
@@ -74,6 +75,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     pathShadingNormals[0] = tex_normal;
     pathAlbedos[0] = 1.0;
     pathEmissions[0] = 0.0;
+    pathSss[0] = is_sss;
 
     for (uint bounce = 0u; bounce < SHARC_PATH_DEPTH; bounce++) {
         float2 noise = BlueNoise::sampleAnimated2D(pixelPos, 2u + bounce, ap.timing.frameCounter);
@@ -117,15 +119,20 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         var hit = query.getHit();
         var surface = HWRT.decodeHit(hit);
+        float2 hit_uv = surface.getUV();
+        float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
+        half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
+
+        let hit_sss = SpecularReader.sss(hit_specular);
+        bool hit_is_sss = hit_sss > sssDither;
+
         pathPositions[pathLength] = surface.getPos();
         pathNormals[pathLength] = surface.getNormal();
         pathShadingNormals[pathLength] = surface.getNormal();
 
-        float2 hit_uv = surface.getUV();
-        float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
-        half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
         pathAlbedos[pathLength] = transmitColor * transformer.fromGamma(hit_albedo);
         pathEmissions[pathLength] = mat_emission(hit_specular);
+        pathSss[pathLength] = hit_is_sss;
 
         pathLength++;
     }
@@ -136,7 +143,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             pathPositions[index],
             pathNormals[index],
             pathShadingNormals[index],
-            index == 0 ? is_sss : false);
+            pathSss[index]);
 
         vertexRadiance += pathEmissions[index];
 

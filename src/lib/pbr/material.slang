@@ -8,7 +8,7 @@ static const ISpecularReader SpecularReader = LabPbr();
 
 float mat_emission(const in half4 specularMap) {
     float emission = SpecularReader.emission(specularMap);
-    return pow2(emission) * 700.0;
+    return emission * 200.0;
 }
 
 

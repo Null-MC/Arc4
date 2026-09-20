@@ -63,89 +63,97 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         diffuse.rgb = directLight * SampleShadowDisc(globalPos, localPos, geo_normal);
 
-        float2 noise = BlueNoise::sampleAnimated2D(globalPos, 0, ap.timing.frameCounter);
-        float3 rayDir = transform_to_world(tex_normal, sampleCosineWeightedHemisphere(noise));
-
-        if (dot(rayDir, geo_normal) < 0.0) rayDir = -rayDir;
-
         half4 specularMap = texDeferSpecular[globalPos];
         float sss = SpecularReader.sss(specularMap);
-        
-        float sssDither = BlueNoise::sampleAnimated1D(globalPos, 1, ap.timing.frameCounter);
-        bool is_sss = sss > sssDither;
 
-        float3 rayBias = 0.002 * geo_normal;
-        if (is_sss) {
-            rayDir = -rayDir;
-            rayBias = -rayBias;
-        }
+        const int SampleCount = 1;
 
-        var query = HWRT.startQuery(
-            localPos + rayBias,
-            rayDir,
-            0.0,
-            max(ap.world.renderDistance, 1.0),
-            HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-            HWRT.RTFlags.NONE);
-        
-        float3 transmitColor = 1.0;
-        while (query.proceed()) {
-            let hit = query.getCandidate();
-            let surface = HWRT.decodeHit(hit);
+        for (int i = 0; i < SampleCount; i++) {
+            // sample index 2: index 0 is used by SampleShadowDisc, 1 by the SSS dither below.
+            float2 noise = BlueNoise::sampleAnimated2D(globalPos, i+9, ap.timing.frameCounter);
+            float3 rayDir = transform_to_world(tex_normal, sampleCosineWeightedHemisphere(noise));
 
-            float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
+            if (dot(rayDir, geo_normal) < 0.0) rayDir = -rayDir;
+            
+            float sssDither = BlueNoise::sampleAnimated1D(globalPos, i+27, ap.timing.frameCounter);
+            bool is_sss = sss > sssDither;
 
-            if (hit_color.a >= 0.99) query.acceptCandidate();
+            float3 rayBias = 0.002 * geo_normal;
+            if (is_sss) {
+                rayDir = -rayDir;
+                rayBias = -rayBias;
+            }
+
+            var query = HWRT.startQuery(
+                localPos + rayBias,
+                rayDir,
+                0.0,
+                max(ap.world.renderDistance, 1.0),
+                HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+                HWRT.RTFlags.NONE);
+            
+            float3 transmitColor = 1.0;
+            while (query.proceed()) {
+                let hit = query.getCandidate();
+                let surface = HWRT.decodeHit(hit);
+
+                float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
+
+                if (hit_color.a >= 0.99) query.acceptCandidate();
+                else {
+                    float3 tint = transformer.fromGamma(hit_color.rgb);
+                    tint *= 1.0 - hit_color.a;
+                    // tint = lerp(1.0, tint, hit_color.a);
+                    transmitColor *= tint;
+                }
+            }
+
+            float3 sampleDiffuse;
+            if (!query.hasHit()) {
+                float3 skyPos = planet.getSkyPosition(localPos);
+                float3 skyColor = planet.sampleView(skyPos, rayDir, normalize(ap.celestial.sunPosition));
+                sampleDiffuse = transformer.fromLinear(skyColor);
+            }
             else {
-                float3 tint = transformer.fromGamma(hit_color.rgb);
-                tint *= 1.0 - hit_color.a;
-                // tint = lerp(1.0, tint, hit_color.a);
-                transmitColor *= tint;
+                var hit = query.getHit();
+                var surface = HWRT.decodeHit(hit);
+                float3 hit_localPos = surface.getPos();
+                float3 hit_localNormal = surface.getNormal();
+
+                hitDistance = distance(localPos, hit_localPos);
+
+                float3 hit_skyPos = planet.getSkyPosition(hit_localPos);
+                float3 sunLight = planet.sampleTransmit(hit_skyPos, sunDir) * SunColor;
+                float3 moonLight = planet.sampleTransmit(hit_skyPos, moonDir) * MoonColor;
+
+                if (!is_sss) {
+                    sunLight *= max(dot(hit_localNormal, sunDir), 0.0);
+                    moonLight *= max(dot(hit_localNormal, moonDir), 0.0);
+                }
+                
+                float3 hitDiffuse = (sunLight + moonLight) / PI;
+
+                hitDiffuse *= SampleShadow(hit_localPos, hit_localNormal);
+
+                float confidence;
+                float3 hitWorldPos = hit_localPos + ap.camera.position;
+                float3 cachedRadiance = sharcLookup(hitWorldPos, hit_localNormal, confidence);
+                // Keep a traced-lighting baseline while resolved SHARC history converges.
+                float cacheWeight = confidence * 0.75;
+                hitDiffuse = lerp(hitDiffuse, cachedRadiance, cacheWeight);
+
+                float2 hit_uv = surface.getUV();
+                float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
+                half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
+                hitDiffuse += mat_emission(hit_specular);
+                
+                sampleDiffuse = hitDiffuse * transformer.fromGamma(hit_albedo);
             }
+
+            diffuse.rgb += sampleDiffuse * transmitColor;
         }
 
-        if (!query.hasHit()) {
-            float3 skyPos = planet.getSkyPosition(localPos);
-            float3 skyColor = planet.sampleView(skyPos, rayDir, normalize(ap.celestial.sunPosition));
-            diffuse.rgb += transformer.fromLinear(skyColor);
-        }
-        else {
-            var hit = query.getHit();
-            var surface = HWRT.decodeHit(hit);
-            float3 hit_localPos = surface.getPos();
-            float3 hit_localNormal = surface.getNormal();
-
-            hitDistance = distance(localPos, hit_localPos);
-
-            float3 hit_skyPos = planet.getSkyPosition(hit_localPos);
-            float3 sunLight = planet.sampleTransmit(hit_skyPos, sunDir) * SunColor;
-            float3 moonLight = planet.sampleTransmit(hit_skyPos, moonDir) * MoonColor;
-
-            if (!is_sss) {
-                sunLight *= max(dot(hit_localNormal, sunDir), 0.0);
-                moonLight *= max(dot(hit_localNormal, moonDir), 0.0);
-            }
-            
-            float3 hitDiffuse = (sunLight + moonLight) / PI;
-
-            hitDiffuse *= SampleShadow(hit_localPos, hit_localNormal);
-
-            float confidence;
-            float3 hitWorldPos = hit_localPos + ap.camera.position;
-            float3 cachedRadiance = sharcLookup(hitWorldPos, hit_localNormal, confidence);
-            // Keep a traced-lighting baseline while resolved SHARC history converges.
-            float cacheWeight = confidence * 0.75;
-            hitDiffuse = lerp(hitDiffuse, cachedRadiance, cacheWeight);
-
-            float2 hit_uv = surface.getUV();
-            float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
-            half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
-            hitDiffuse += mat_emission(hit_specular);
-            
-            diffuse.rgb += hitDiffuse * transformer.fromGamma(hit_albedo);
-        }
-
-        diffuse.rgb *= transmitColor;
+        diffuse.rgb /= SampleCount;
 
         diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
     }

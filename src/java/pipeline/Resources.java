@@ -22,6 +22,8 @@ public class Resources {
     public final Texture2D texDeferSpecular;
     public final Texture2D texDeferData;
 
+    public final Texture2D texDiffuse_A;
+    public final Texture2D texDiffuse_B;
     public final Texture2D texSpecular_A;
     public final Texture2D texSpecular_B;
 
@@ -57,6 +59,15 @@ public class Resources {
             .create();
 
         texDeferData = pipeline.texture2D("texDeferData", TextureFormat.RG16_UINT)
+            .renderSize()
+            .create();
+
+        // Raw noisy diffuse GI sample for this frame: rgb = color, a = normalized hit distance.
+        texDiffuse_A = pipeline.texture2D("texDiffuse_A", TextureFormat.RGBA16_SFLOAT)
+            .renderSize()
+            .create();
+
+        texDiffuse_B = pipeline.texture2D("texDiffuse_B", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
             .create();
 

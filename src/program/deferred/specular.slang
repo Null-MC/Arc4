@@ -75,7 +75,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float NoV = max(dot(tex_normal, localViewDir), 0.0);
         float F_s = F_schlick(NoV, f0, 1.0);
 
-        float dither = BlueNoise::sampleAnimated1D(globalPos, 0, ap.timing.frameCounter);
+        float dither = BlueNoise::sampleAnimated1D(globalPos, 73, ap.timing.frameCounter);
         bool is_reflect = F_s >= dither;
 
         float3 rayViewDir;
@@ -104,7 +104,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 -viewDir,
                 viewNormal,
                 alpha,
-                BlueNoise::sampleAnimated2D(globalPos, 1, ap.timing.frameCounter)
+                BlueNoise::sampleAnimated2D(globalPos, 37, ap.timing.frameCounter)
             );
 
             rayViewDir = reflect(viewDir, microfacetNormal);
@@ -344,8 +344,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             specular.rgb *= lerp(1.0, sqrt(albedo), metalness);
 
             // TODO: THis should not exist!
-            // float smoothness = specularMap.r;
-            // specular.rgb *= smoothness;
+            float smoothness = specularMap.r;
+            specular.rgb *= sqrt(smoothness);
         }
         else {
             uint blockId = deferData.r;

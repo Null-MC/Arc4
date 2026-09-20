@@ -6,11 +6,11 @@ import lib.noise.blue;
 
 
 static const float BlurRadiusPixels = 10.0;
-static const float MaxAccumulatedFrames = 32.0;
+static const float MaxAccumulatedFrames = 64.0;
 static const int TapCount = 6;
 
 Texture2D<float3> texBlur_read;
-Texture2D<float4> texReblurData_read;
+Texture2D<float4> texAccumData_read;
 Texture2D<half4> texDeferNormal;
 
 [[vk::image_format("rgba16f")]]
@@ -36,7 +36,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 normal = octohedral::decode(normalData.xy);
     float3 viewNormal = mul(float3x3(ap.camera.view), normal);
 
-    float4 centerData = texReblurData_read[globalPos];
+    float4 centerData = texAccumData_read[globalPos];
     float frameCount = centerData.b;
     float normHitDist = centerData.a;
 

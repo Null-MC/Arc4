@@ -38,7 +38,7 @@ float3 _SampleShadow(const in float3 localPos, const in float3 geo_normal, const
 
         float3 tint = transformer.fromGamma(hit_color.rgb);
         // tint *= 1.0 - hit_color.a;
-        tint = lerp(1.0, tint, hit_color.a);
+        // tint = lerp(1.0, tint*tint, hit_color.a);
         color *= tint;
     }
 
