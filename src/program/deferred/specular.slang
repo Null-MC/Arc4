@@ -258,7 +258,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (!query.hasHit()) {
             // sky
             float3 skyPos = planet.getSkyPosition(localPos);
-
             float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
             specular.rgb = transformer.fromLinear(skyColor);
 
@@ -286,16 +285,20 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 hit_diffuse = (sunLight + moonLight) / PI;
             hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
 
-            // TODO: replace direct sharc lookup with an additional indirect trace
             hit_diffuse += sampleIndirect(globalPos, hit_localPos, hit_localNormal);
 
             float2 hit_uv = surface.getUV();
+            half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
+
+            float hit_smoothness = hit_specular.r;
+            float hit_metalness = SpecularReader.metalness(hit_specular);
+            hit_diffuse *= 1.0 - hit_metalness * sqrt(hit_smoothness);
+
             // let size = surface.albedo().getSize();
             // let cone2 = cone.Propagate(distance(localPos, hit_localPos));
             // var mip = cone2.CalculateMipLevel(size.z);
 
             float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
-            half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
             hit_diffuse += mat_emission(hit_specular);
 
             specular.rgb = hit_diffuse * transformer.fromGamma(hit_albedo);

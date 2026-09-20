@@ -48,8 +48,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float f0 = SpecularReader.f0(specularMap);
         float metalness = SpecularReader.metalness(specularMap);
 
-        // float smoothness = specularMap.r;
-        diffuseLight *= 1.0 - metalness;
+        float smoothness = specularMap.r;
+        diffuseLight *= 1.0 - metalness * sqrt(smoothness);
 
         diffuseLight += mat_emission(specularMap);
 
