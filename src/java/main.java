@@ -98,22 +98,23 @@ public class main implements ShaderPack {
             }
 
             diffuseFlipper.flip();
-                         
-            stage.compute("Deferred-Specular", "program/deferred/specular", "main")
-                .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
-                .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
+            
+            if (settings.getBoolValue("Debug_SpecularEnabled")) {
+                stage.compute("Deferred-Specular", "program/deferred/specular", "main")
+                    .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
+                    .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
+                    .dispatch2D(sizeX_16, sizeY_16);
+
+                specularFlipper.flip();
+            }
+
+            
+            stage.compute("Accumulate-Diffuse", "program/deferred/accumulate", "main")
+                .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
+                .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                 .dispatch2D(sizeX_16, sizeY_16);
 
-            specularFlipper.flip();
-   
-            // TODO: blur
-
-            // Accumulation
-            // stage.compute("Accumulate-Diffuse", "program/deferred/accumulate", "main")
-            //     .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
-            //     .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
-            //     .dispatch2D(sizeX_16, sizeY_16);
-            // diffuseFlipper.flip();
+            diffuseFlipper.flip();
 
 
             stage.compute("Deferred-Composite", "program/deferred/composite", "main")

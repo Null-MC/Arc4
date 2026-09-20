@@ -46,6 +46,7 @@ public class settings implements PackSettings {
         subscreen(screen, "Debug", screen_debug -> {
             screen_debug.option("Debug_WhiteWorld", OptionType.boolType(false), true);
             screen_debug.option("Debug_SkyLuts", OptionType.boolType(false), false);
+            screen_debug.option("Debug_SpecularEnabled", OptionType.boolType(true), false);
         });
     }
 

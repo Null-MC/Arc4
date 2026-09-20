@@ -55,9 +55,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         color.rgb = albedo * diffuseLight * color.a;
 
-        // TODO: add specular
-        float3 specularLight = texSpecular_read[globalPos];
-        color.rgb += specularLight;// * smoothness;
+        if (userSettings.Debug_SpecularEnabled) {
+            float3 specularLight = texSpecular_read[globalPos];
+            color.rgb += specularLight;// * smoothness;
+        }
 
         if (ap.camera.fluid == 1) {
             float viewDist = length(viewPos);
