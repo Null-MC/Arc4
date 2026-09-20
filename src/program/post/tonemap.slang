@@ -15,8 +15,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 color = tex_read[globalPos];
 
     color = max(color, 0.0);
-    // color /= max(exposure[0].average, 1e-8);
-    color *= 0.008;
+    color /= max(exposure[0].average, 1e-8);
+    // color *= 0.008;
 
     color = transformer.toLinear(color);
 

@@ -104,7 +104,7 @@ public class main implements ShaderPack {
                 reblur.render(stage, diffuseFlipper.getReader().name());
             }
             
-            if (settings.getBoolValue("Debug_SpecularEnabled")) {
+            if (settings.getBoolValue("SpecularEnabled")) {
                 stage.compute("Deferred-Specular", "program/deferred/specular", "main")
                     .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
                     .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
@@ -123,15 +123,17 @@ public class main implements ShaderPack {
             
             mainFlipper.flip();
 
-            stage.compute("Volumetric", "program/deferred/volumetric", "main")
-                .overrideObject("texMain_read", mainFlipper.getReader().name())
-                .overrideObject("texMain_write", mainFlipper.getWriter().name())
-                .exportInt("Froxel_Width", froxels.BufferWidth)
-                .exportInt("Froxel_Height", froxels.BufferHeight)
-                .exportInt("Froxel_Depth", froxels.BufferDepth)
-                .dispatch2D(sizeX_16, sizeY_16);
+            if (settings.getBoolValue("VolumetricEnabled")) {
+                stage.compute("Volumetric", "program/deferred/volumetric", "main")
+                    .overrideObject("texMain_read", mainFlipper.getReader().name())
+                    .overrideObject("texMain_write", mainFlipper.getWriter().name())
+                    .exportInt("Froxel_Width", froxels.BufferWidth)
+                    .exportInt("Froxel_Height", froxels.BufferHeight)
+                    .exportInt("Froxel_Depth", froxels.BufferDepth)
+                    .dispatch2D(sizeX_16, sizeY_16);
 
-            mainFlipper.flip();
+                mainFlipper.flip();
+            }
 
             if (settings.getBoolValue("TAA_Enabled")) {
                 stage.compute("TAA", "program/post/taa", "main")

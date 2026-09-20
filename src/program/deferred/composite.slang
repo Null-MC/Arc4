@@ -4,6 +4,7 @@ import lib.common;
 import lib.pbr.material;
 import lib.sky.shared;
 import lib.sky.transmit;
+import lib.sky.view;
 import lib.sky.sun;
 import lib.sky.moon;
 import lib.octohedral;
@@ -55,7 +56,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         color.rgb = albedo * diffuseLight * color.a;
 
-        if (userSettings.Debug_SpecularEnabled) {
+        if (userSettings.SpecularEnabled) {
             float3 specularLight = texSpecular_read[globalPos];
             color.rgb += specularLight;// * smoothness;
         }
@@ -97,8 +98,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 localViewDir = normalize(localPos);
         color.rgb = 0.0h;
 
+        float3 sunDir = normalize(ap.celestial.sunPosition);
+
         if (planet.rayIntersectsGround(skyPos, localViewDir) <= 0.0) {
-            float3 sunDir = normalize(ap.celestial.sunPosition);
             float3 sunLight = renderSun(localViewDir, sunDir) * SunColor;
 
             float3 moonDir = normalize(ap.celestial.moonPosition);
@@ -108,6 +110,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 transmit = planet.sampleTransmit(skyPos, localViewDir);
             color.rgb *= transformer.fromLinear(transmit);
+        }
+
+        if (!userSettings.VolumetricEnabled) {
+            color.rgb += planet.sampleView(skyPos, localViewDir, sunDir);
         }
     }
 
