@@ -126,7 +126,8 @@ void main(ComputeInput input) {
         }
     }
     else {
-        indirect = planet.sampleMultiScatter(skyPos, sunDir);
+        float cameraSkyLight = ap.camera.brightness.y;
+        indirect = planet.sampleMultiScatter(skyPos, sunDir) * cameraSkyLight;
     }
 
 
