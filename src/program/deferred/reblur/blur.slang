@@ -5,7 +5,7 @@ import lib.octohedral;
 import lib.noise.blue;
 
 
-static const float BlurRadiusPixels = 24.0;
+static const float BlurRadiusPixels = 12.0;
 static const float MaxAccumulatedFrames = 64.0;
 static const int TapCount = 8;
 

@@ -18,7 +18,7 @@ Texture2D<half4> texDeferColor;
 Texture2D<half4> texDeferNormal;
 Texture2D<half4> texDeferSpecular;
 Texture2D<half3> texDiffuse_read;
-Texture2D<half3> texSpecular_read;
+Texture2D<half4> texSpecular_read;
 
 [[shader("compute")]]
 [numthreads(16,16)]
@@ -57,8 +57,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         color.rgb = albedo * diffuseLight * color.a;
 
         if (userSettings.SpecularEnabled) {
-            float3 specularLight = texSpecular_read[globalPos];
-            color.rgb += specularLight;// * smoothness;
+            float4 specularLight = texSpecular_read[globalPos];
+            color.rgb *= 1.0 - specularLight.a;
+            color.rgb += specularLight.rgb;// * smoothness;
         }
 
         if (ap.camera.fluid == 1) {
@@ -113,7 +114,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
 
         if (!userSettings.VolumetricEnabled) {
-            color.rgb += planet.sampleView(skyPos, localViewDir, sunDir);
+            float3 skyColor = planet.sampleView(skyPos, localViewDir, sunDir);
+            color.rgb += transformer.fromLinear(skyColor);
         }
     }
 

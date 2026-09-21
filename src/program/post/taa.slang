@@ -7,7 +7,7 @@ extern static const int TAA_MaxAccumFrames = 8;
 // Still-accumulation cap for userSettings.Accumulation: 666 frames (~11s at 60fps) plateaus the
 // blend weight at 1/667 long before GI/specular noise is actually resolved; float32 history has
 // exact-integer headroom well past this, so let it run far longer before flattening out.
-static const float TAA_MaxStillAccumFrames = 65536.0;
+static const float TAA_MaxStillAccumFrames = 1000.0;
 static const uint groupResX = 16;
 static const uint groupResY = 16;
 

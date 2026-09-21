@@ -55,7 +55,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
     if (depth > 0.0) {
-        specular.a = 1.0;
+        // specular.a = 1.0;
 
         half4 normalData = texDeferNormal[globalPos];
         float3 geo_normal = octohedral::decode(normalData.xy);
@@ -74,6 +74,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 localViewDir = -normalize(localPos);
         float NoV = max(dot(tex_normal, localViewDir), 0.0);
         float F_s = F_schlick(NoV, f0, 1.0);
+        specular.a = F_s;
 
         float dither = BlueNoise::sampleAnimated1D(globalPos, 73, ap.timing.frameCounter);
         bool is_reflect = F_s >= dither;

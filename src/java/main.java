@@ -86,8 +86,6 @@ public class main implements ShaderPack {
         withStage(pipeline, ProgramStage.POST_RENDER, stage -> {
             var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
             var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
-
-            froxels.render(stage);
             
             if (settings.getBoolValue("Sharc_Enabled")) {
                 sharc.render(stage, diffuseFlipper.getWriter());
@@ -124,6 +122,8 @@ public class main implements ShaderPack {
             mainFlipper.flip();
 
             if (settings.getBoolValue("VolumetricEnabled")) {
+                froxels.render(stage);
+
                 stage.compute("Volumetric", "program/deferred/volumetric", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
                     .overrideObject("texMain_write", mainFlipper.getWriter().name())
