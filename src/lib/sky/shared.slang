@@ -42,7 +42,7 @@ extension PlanetBuffer {
         float cameraAltitude_KM = (ap.camera.position.y - userSettings.SeaLevel) * 0.001;
         skyPos_KM.y += cameraAltitude_KM + RadiusGround_KM;
 
-        skyPos_KM.y = max(skyPos_KM.y, RadiusGround_KM + 0.002);
+        skyPos_KM.y = max(skyPos_KM.y, RadiusGround_KM + 0.00002);
 
         return skyPos_KM;
     }
@@ -58,36 +58,67 @@ extension SkyBuffer {
         
         // Slight shift in scale height based on pressure/temperature extremes
         float rayleighScaleHeight = H_R_DEFAULT * (1.0 + (userSettings.Sky_BarometricPressure - 1.0) * 0.1);
-        
         float rayleighDensity = exp(-max(altitude_KM, 0.0) / rayleighScaleHeight);
+
         outSample.rayleighScattering = rayleighSeaLevel * rayleighDensity;
 
-        // ----------------------------------------------------
-        // MIE (Aerosols, Dust, Fog)
-        // ----------------------------------------------------
-        // Weather scale: Fog lowers the scale height, trapping particles near the ground
-        float humidity = saturate(userSettings.Sky_Humidity);
-        float fog = saturate(userSettings.Sky_FogIntensity);
-        float wetAerosol = lerp(1.0, 16.0, pow2(humidity));
-        float fogAerosol = lerp(1.0, 8.0, pow2(fog));
-        float mieScaleHeight = lerp(H_M_DEFAULT, 0.25, userSettings.Sky_FogIntensity);
-        float mieDensity = exp(-max(altitude_KM, 0.0) / mieScaleHeight);
 
-        // Weather scale: Turbidity increases overall aerosol count dramatically
-        float mieScatteringScalar = BETA_MIE_BASE_SCA * userSettings.Sky_Turbidity * wetAerosol * fogAerosol;
-        outSample.mieScattering = float3(mieScatteringScalar * mieDensity);
+        // ----------------------------------------------------
+        // MIE - LAYER A: PLANETARY AEROSOLS (Global Haze/Dust)
+        // ----------------------------------------------------
+        // Humidity swells default global aerosols slightly
+        float wetAerosol = lerp(1.0, 4.0, pow2(userSettings.Sky_Humidity));
+        float planetaryMieDensity = exp(-max(altitude_KM, 0.0) / H_M_DEFAULT);
+        
+        float planetaryScatteringScalar = BETA_MIE_BASE_SCA * userSettings.Sky_Turbidity * wetAerosol;
+        float3 planetaryMieScattering = float3(planetaryScatteringScalar * planetaryMieDensity);
 
-        // Handle absorption (clean aerosols absorb a bit, pollution/sand absorbs a lot)
+
+        // ----------------------------------------------------
+        // MIE - LAYER B: GROUND FOG BLANKET (Localized Dense Fog)
+        // ----------------------------------------------------
+        float fogIntensity3 = pow3(userSettings.Sky_FogIntensity);
+
+        // Compute fog envelope properties based on slider intensity
+        // Max height dynamically scales up to 250 meters (0.25 KM)
+        float fogMaxHeight_KM = lerp(0.01, 0.25, userSettings.Sky_FogIntensity);
+        
+        // Falloff softness at the top boundary edge of the fog bank
+        float fogTopSoftness_KM = 0.03; 
+        
+        // Create a physical boundary envelope using smoothstep
+        float fogEnvelope = saturate(1.0 - smoothstep(fogMaxHeight_KM - fogTopSoftness_KM, fogMaxHeight_KM, altitude_KM));
+        
+        // Internal distribution: Apply rapid exponential decay inside the blanket so it is thickest at ground level
+        float fogInternalFalloff = exp(-max(altitude_KM, 0.0) / 0.06);
+        float groundFogDensity = fogEnvelope * fogInternalFalloff;
+
+        // Non-linear perceptual scaling: High fog slider values yield exponential density increases
+        // Boosted up to a 128x multiplier for heavy, murky opaque fog conditions
+        float fogScatteringScalar = BETA_MIE_BASE_SCA * lerp(0.0, 12800.0, fogIntensity3);
+        float3 groundFogMieScattering = float3(fogScatteringScalar * groundFogDensity);
+
+        // Combine planetary dust and dense ground fog into final Mie scattering
+        outSample.mieScattering = planetaryMieScattering + groundFogMieScattering;
+
+
+        // ----------------------------------------------------
+        // 4. MIE ABSORPTION & TOTAL EXTINCTION
+        // ----------------------------------------------------
+        // Pollution factors handle coloring/light-loss for industrial settings or dust storms
         float3 pollution = saturate(float3(userSettings.Sky_PollutionColor_R, userSettings.Sky_PollutionColor_G, userSettings.Sky_PollutionColor_B));
         float3 mieAbsorptionBase = float3(BETA_MIE_BASE_ABS) * (1.0 + 4.0 * pollution);
-        float3 mieAbsorption = mieAbsorptionBase * userSettings.Sky_Turbidity * wetAerosol * fogAerosol * mieDensity;
 
-        // ----------------------------------------------------
-        // TOTAL EXTINCTION
-        // ----------------------------------------------------
-        // Extinction is everything that strips light away from the ray path
-        // Note: Ozone absorption would be added to this total extinction
-        outSample.extinction = outSample.rayleighScattering + outSample.mieScattering + mieAbsorption;
+        // Planetary absorption maps to global planetary layer
+        float3 planetaryMieAbsorption = mieAbsorptionBase * userSettings.Sky_Turbidity * wetAerosol * planetaryMieDensity;
+        
+        // Fog layer absorption tracks the ground fog profile to maintain proper volumetric shadows inside the fog bank
+        float3 groundFogMieAbsorption = mieAbsorptionBase * (lerp(0.0, 128.0, fogIntensity3) * groundFogDensity);
+        
+        float3 totalMieAbsorption = planetaryMieAbsorption + groundFogMieAbsorption;
+
+        // Extinction represents all accumulated light scattered away or absorbed along the ray path
+        outSample.extinction = outSample.rayleighScattering + outSample.mieScattering + totalMieAbsorption;
     }
     
     // public void trace(out float3 scattering, out float3 transmittance, const in float3 origin, const in float3 rayDir, const in float rayDist, const in int stepCount) {
