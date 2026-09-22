@@ -95,7 +95,7 @@ extension SkyBuffer {
 
         // Non-linear perceptual scaling: High fog slider values yield exponential density increases
         // Boosted up to a 128x multiplier for heavy, murky opaque fog conditions
-        float fogScatteringScalar = BETA_MIE_BASE_SCA * lerp(0.0, 12800.0, fogIntensity3);
+        float fogScatteringScalar = BETA_MIE_BASE_SCA * lerp(0.0, 128.0, fogIntensity3);
         float3 groundFogMieScattering = float3(fogScatteringScalar * groundFogDensity);
 
         // Combine planetary dust and dense ground fog into final Mie scattering
