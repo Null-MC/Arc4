@@ -39,15 +39,15 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     if (depth > 0.0) {
         color = texDeferColor[globalPos];
-        float3 albedo = transformer.fromGamma(color.rgb);
+        float3 albedo = getColorSpace().fromGamma(color.rgb);
 
         if (userSettings.Debug_WhiteWorld) albedo = 1.0;
 
         float3 diffuseLight = texDiffuse_read[globalPos];
         half4 specularMap = texDeferSpecular[globalPos];
 
-        float f0 = SpecularReader.f0(specularMap);
-        float metalness = SpecularReader.metalness(specularMap);
+        float f0 = getSpecularReader().f0(specularMap);
+        float metalness = getSpecularReader().metalness(specularMap);
 
         float smoothness = specularMap.r;
         diffuseLight *= 1.0 - metalness * sqrt(smoothness);
@@ -110,12 +110,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             color.rgb = sunLight + moonLight;
 
             float3 transmit = planet.sampleTransmit(skyPos, localViewDir);
-            color.rgb *= transformer.fromLinear(transmit);
+            color.rgb *= getColorSpace().fromLinear(transmit);
         }
 
         if (!userSettings.VolumetricEnabled) {
             float3 skyColor = planet.sampleView(skyPos, localViewDir, sunDir);
-            color.rgb += transformer.fromLinear(skyColor);
+            color.rgb += getColorSpace().fromLinear(skyColor);
         }
     }
 

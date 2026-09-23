@@ -19,6 +19,9 @@ option.Sky_PollutionColor_R=Pollution Red
 option.Sky_PollutionColor_G=Pollution Green
 option.Sky_PollutionColor_B=Pollution Blue
 
+screen.Material=Material
+option.Material_Format=Format
+
 screen.Sharc=SHaRC
 option.Sharc_Enabled=Enabled
 option.Sharc_BucketSize=Bucket Size

@@ -40,7 +40,7 @@ public class HillaireSky {
 
         Sky = SkyBuffer.Earth;
 
-        TransmitTexture = pipeline.texture2D("texSkyTransmit", TextureFormat.RGBA16_SFLOAT)
+        TransmitTexture = pipeline.texture2D("texSkyTransmit", TextureFormat.RGBA16_UNORM)
             .size(TransmitBufferWidth, TransmitBufferHeight)
             .create();
         

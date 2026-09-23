@@ -122,7 +122,7 @@ void main(ComputeInput input) {
         if (!query.hasHit()) {
             // sky
             float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
-            indirect = PI * transformer.fromLinear(skyColor);
+            indirect = PI * getColorSpace().fromLinear(skyColor);
         }
     }
     else {

@@ -14,11 +14,11 @@ namespace ACES {
 
     static const float3 AP1_RGB2Y = float3(0.272229, 0.674082, 0.0536895);
 
-    static const float3x3 D60_2_D65_CAT = {
+    static const float3x3 D60_2_D65_CAT = float3x3(
         0.98722400, -0.00611327, 0.0159533,
         -0.00759836,  1.00186000, 0.0053302,
         0.00307257, -0.00509595, 1.0816800
-    };
+    );
 
     // static const float3x3 AP0_2_AP1_MAT = {
     //      1.4514393161, -0.2365107469, -0.2149285693,
@@ -37,36 +37,47 @@ namespace ACES {
     //      0.0447945634, 0.8596711185, 0.0955343182,
     //     -0.0055258826, 0.0040252103, 1.0015006723
     // };
+    static const float3x3 AP1_2_AP0_MAT = float3x3(
+         0.6954522414, 0.1406786965, 0.1638690622,
+         0.0447945634, 0.8596711185, 0.0955343182,
+        -0.0055258826, 0.0040252103, 1.0015006723
+    );
 
-    static const float3x3 sRGB_2_AP0 = {
+    static const float3x3 sRGB_2_AP0 = float3x3(
         0.4397010, 0.3829780, 0.1773350,
         0.0897923, 0.8134230, 0.0967616,
         0.0175440, 0.1115440, 0.8707040
-    };
+    );
 
-    static const float3x3 sRGB_2_AP1 = {
+    static const float3x3 sRGB_to_AP1 = float3x3(
         0.61319, 0.33951, 0.04737,
         0.07021, 0.91634, 0.01345,
         0.02062, 0.10957, 0.86961
-    };
+    );
 
-    static const float3x3 AP1_2_XYZ_MAT = {
+    static const float3x3 AP1_to_sRGB = float3x3(
+         1.70485868, -0.62171607, -0.08314261,
+        -0.13025866,  1.14073577, -0.01047711,
+        -0.02400751, -0.12896391,  1.15297142
+    );
+
+    static const float3x3 AP1_2_XYZ_MAT = float3x3(
         0.6624541811, 0.1340042065, 0.1561876870,
         0.2722287168, 0.6740817658, 0.0536895174,
         -0.0055746495, 0.0040607335, 1.0103391003
-    };
+    );
 
-    static const float3x3 XYZ_2_AP1_MAT = {
+    static const float3x3 XYZ_2_AP1_MAT = float3x3(
         1.6410233797, -0.3248032942, -0.2364246952,
         -0.6636628587,  1.6153315917,  0.0167563477,
         0.0117218943, -0.0082844420,  0.9883948585
-    };
+    );
 
-    static const float3x3 XYZ_2_REC709_MAT = {
+    static const float3x3 XYZ_2_REC709_MAT = float3x3(
         3.2409699419, -1.5373831776, -0.4986107603,
         -0.9692436363,  1.8759675015,  0.0415550574,
         0.0556300797, -0.2039769589,  1.0569715142
-    };
+    );
 
 
     float3 Y_2_linCV(float3 Y, float Ymax, float Ymin) {
@@ -86,7 +97,7 @@ namespace ACES {
     }
 
     float3 linear_to_cg(const in float3 color) {
-        return mul(sRGB_2_AP1, color);
+        return mul(sRGB_to_AP1, color);
     }
 
     float cct_from_Linear(float lin) {
@@ -128,33 +139,19 @@ namespace ACES {
         return mul(XYZ_2_AP1_MAT, XYZ);
     }
 
-
-    float3 cgToLinearSRGB(float3 acescgColor) {
-        // The transformation matrix from ACEScg (AP1) to Linear sRGB (D65)
-        const float3x3 ACEScg_to_LinearSRGB = float3x3(
-             1.70485868, -0.62171607, -0.08314261,
-            -0.13025866,  1.14073577, -0.01047711,
-            -0.02400751, -0.12896391,  1.15297142
-        );
-
-        // Multiply the matrix by the color vector
-        // Slang uses standard row-major matrix math layout similar to HLSL
-        return mul(ACEScg_to_LinearSRGB, acescgColor);
-    }
-
 }
 
-struct ACES_Transformer : ColorTransformer {
+struct ACEScg_Transformer : ColorTransformer {
     public override float3 fromGamma(const in float3 color) {
         return fromLinear(srgbToLinear(color));
     }
 
     public override float3 fromLinear(const in float3 color) {
-        return ACES::linear_to_cg(color);
+        return mul(ACES::sRGB_to_AP1, color);
     }
 
     public float3 toLinear(const in float3 color) {
-        return ACES::cgToLinearSRGB(color);
+        return mul(ACES::AP1_to_sRGB, color);
     }
     
     public override float3 toGamma(const in float3 color) {

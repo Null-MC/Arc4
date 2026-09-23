@@ -44,7 +44,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
 
     // Slightly scale down the view position to avoid precision issues.
-    viewPos *= 0.99;
+    // viewPos *= 0.99;
 
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
@@ -55,7 +55,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 sunDir = normalize(ap.celestial.sunPosition);
 
     half4 specularMap = texDeferSpecular[globalPos];
-    float sss = SpecularReader.sss(specularMap);
+    float sss = getSpecularReader().sss(specularMap);
 
     float sssDither = BlueNoise::sampleAnimated1D(globalPos, 1, ap.timing.frameCounter);
     bool is_sss = sss > sssDither;
@@ -95,24 +95,32 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         float3 transmitColor = 1.0;
         while (query.proceed()) {
-            let candidate = query.getCandidate();
-            let candidateSurface = HWRT.decodeHit(candidate);
-            float4 candidateColor = candidateSurface.albedo().sampleLevel(candidateSurface.getUV(), 0.0) * candidateSurface.getColor();
-
-            if (candidateColor.a >= 0.99) query.acceptCandidate();
-            else {
-                float3 tint = transformer.fromGamma(candidateColor.rgb);
-                tint *= 1.0 - candidateColor.a;
-                // tint = lerp(1.0, tint, candidateColor.a);
-                transmitColor *= tint;
+            let hit = query.getCandidate();
+            let hitType = hit.getGeometryIndex();
+            if (hitType == HWRT.RTGeometryIndex.SOLID) {
+                query.acceptCandidate();
+                continue;
             }
+
+            let surface = HWRT.decodeHit(hit);
+            float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
+
+            if (hitType == HWRT.RTGeometryIndex.CUTOUT) {
+                if (hit_color.a >= 0.1) query.acceptCandidate();
+                continue;
+            }
+
+            float3 tint = getColorSpace().fromGamma(hit_color.rgb);
+            tint *= 1.0 - hit_color.a;
+            // tint = lerp(1.0, tint, hit_color.a);
+            transmitColor *= tint;
         }
 
         if (!query.hasHit()) {
             float3 skyPos = planet.getSkyPosition(pathPositions[bounce]);
-            skyRadiance = planet.sampleView(skyPos, rayDir, sunDir);
             
-            skyRadiance = transmitColor * transformer.fromLinear(skyRadiance);
+            skyRadiance = planet.sampleView(skyPos, rayDir, sunDir);
+            skyRadiance = transmitColor * getColorSpace().fromLinear(skyRadiance);
             terminatedInSky = true;
             break;
         }
@@ -123,14 +131,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
         half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
 
-        let hit_sss = SpecularReader.sss(hit_specular);
+        let hit_sss = getSpecularReader().sss(hit_specular);
         bool hit_is_sss = hit_sss > sssDither;
 
         pathPositions[pathLength] = surface.getPos();
         pathNormals[pathLength] = surface.getNormal();
         pathShadingNormals[pathLength] = surface.getNormal();
 
-        pathAlbedos[pathLength] = transmitColor * transformer.fromGamma(hit_albedo);
+        pathAlbedos[pathLength] = transmitColor * getColorSpace().fromGamma(hit_albedo);
         pathEmissions[pathLength] = mat_emission(hit_specular);
         pathSss[pathLength] = hit_is_sss;
 
@@ -140,6 +148,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 downstreamRadiance = 0.0;
     for (int index = int(pathLength) - 1; index >= 0; index--) {
         float3 vertexRadiance = directLighting(
+            globalPos,
             pathPositions[index],
             pathNormals[index],
             pathShadingNormals[index],
@@ -166,7 +175,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 }
 
 
-float3 directLighting(const in float3 localPos, const in float3 geo_normal, const in float3 tex_normal, const in bool sss) {
+float3 directLighting(
+        const in int2 globalPos,
+        const in float3 localPos,
+        const in float3 geo_normal,
+        const in float3 tex_normal,
+        const in bool sss) {
     float3 sunDir = normalize(ap.celestial.sunPosition);
     float3 moonDir = normalize(ap.celestial.moonPosition);
     float3 skyLightDir = normalize(ap.celestial.position);
@@ -180,5 +194,6 @@ float3 directLighting(const in float3 localPos, const in float3 geo_normal, cons
         moonLight *= max(dot(tex_normal, moonDir), 0.0);
     }
 
-    return (sunLight + moonLight) * SampleShadow(localPos, geo_normal);
+    float3 directLight = (sunLight + moonLight);// / PI;
+    return directLight * SampleShadowDisc(globalPos, localPos, geo_normal);
 }

@@ -34,7 +34,7 @@ struct BasicShader : Shader<VertexData, FragmentData> {
 
         ap.discardCutout(color);
 
-        color.rgb = transformer.fromGamma(color.rgb);
+        color.rgb = getColorSpace().fromGamma(color.rgb);
 
         // if (userSettings.shadows) {
         //     color.rgb *= lerp(0.35, 1.0, shadowVisibility(input.pos));

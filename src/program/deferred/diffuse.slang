@@ -43,7 +43,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
 
     // Slightly scale down the view position to avoid precision issues.
-    viewPos *= 0.99;
+    // viewPos *= 0.99;
     
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
@@ -74,33 +74,40 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         // sample index 2: index 0 is used by SampleShadowDisc, 1 by the SSS dither below.
         float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, 2, ap.timing.frameCounter);
-        float3 rayDir = sampleCosineWeightedHemisphere(rayNoise);
-        rayDir = transform_to_world(tex_normal, rayDir);
+        float3 rayDirSrc = sampleCosineWeightedHemisphere(rayNoise);
+        float3 rayDir = transform_to_world(tex_normal, rayDirSrc);
 
         if (dot(rayDir, geo_normal) < 0.0) rayDir = -rayDir;
 
         half4 specularMap = texDeferSpecular[globalPos];
-        float sss = SpecularReader.sss(specularMap);
+        float sss = getSpecularReader().sss(specularMap);
 
         float sssDither = BlueNoise::sampleAnimated1D(globalPos, 1, ap.timing.frameCounter);
         bool is_sss = sss > sssDither;
 
         float3 rayBias = 0.002 * geo_normal;
+        // float3 rayOrigin = localPos + 0.002 * geo_normal;
+        // var flags = HWRT.RTFlags.USE_TWO_STATE_OMM;
+
         if (is_sss) {
             rayDir = -rayDir;
             rayBias = -rayBias;
+            // rayOrigin = localPos - 0.002 * geo_normal;
+            // rayDir = transform_to_world(-geo_normal, rayDirSrc);
+            // flags = flags | HWRT.RTFlags.CULL_BACK_FACES;
         }
 
         // float fWidth = asfloat(texDeferData[globalPos].g);
         // var cone = RayCone.CreateFromGBuffer(fWidth);
 
         var query = HWRT.startQuery(
+            // rayOrigin,
             localPos + rayBias,
             rayDir,
             0.0,
             max(ap.world.renderDistance, 1.0),
             HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-            HWRT.RTFlags.USE_TWO_STATE_OMM);
+            HWRT.RTFlags.USE_TWO_STATE_OMM | HWRT.RTFlags.CULL_BACK_FACES);
         
         float3 transmitColor = 1.0;
         while (query.proceed()) {
@@ -108,32 +115,32 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             let hitType = hit.getGeometryIndex();
             if (hitType == HWRT.RTGeometryIndex.SOLID) {
                 query.acceptCandidate();
-                break;
+                continue;
             }
-
-            let surface = HWRT.decodeHit(hit);
 
             // let size = surface.albedo().getSize();
             // let cone2 = cone.Propagate(distance(localPos, hit_localPos));
             // var mip = cone2.CalculateMipLevel(size.z);
 
+            let surface = HWRT.decodeHit(hit);
             float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
 
-            if (hitType == HWRT.RTGeometryIndex.CUTOUT && hit_color.a >= 0.1) {
-                query.acceptCandidate();
-                break;
+            if (hitType == HWRT.RTGeometryIndex.CUTOUT) {
+                if (hit_color.a >= 0.1) query.acceptCandidate();
+                continue;
             }
 
-            float3 tint = transformer.fromGamma(hit_color.rgb);
+            float3 tint = getColorSpace().fromGamma(hit_color.rgb);
             tint *= 1.0 - hit_color.a;
             // tint = lerp(1.0, tint, hit_color.a);
             transmitColor *= tint;
         }
 
+        float3 indirect;
         if (!query.hasHit()) {
             // sky
             float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
-            diffuse.rgb += transmitColor * transformer.fromLinear(skyColor);
+            indirect = getColorSpace().fromLinear(skyColor);
         }
         else {
             // hit
@@ -154,7 +161,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 moonLight *= max(dot(hit_localNormal, moonDir), 0.0);
             }
 
-            float3 hit_diffuse = sunLight + moonLight;
+            float3 hit_diffuse = (sunLight + moonLight) / PI;
             hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
 
             float2 hit_uv = surface.getUV();
@@ -166,8 +173,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             half4 hit_specularMap = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
             hit_diffuse += mat_emission(hit_specularMap);
 
-            diffuse.rgb += hit_diffuse * transmitColor * transformer.fromGamma(hit_albedo);
+            indirect = hit_diffuse * getColorSpace().fromGamma(hit_albedo);
         }
+
+        // if (is_sss) indirect *= PI;
+
+        diffuse.rgb += indirect * transmitColor;
 
         diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
     }

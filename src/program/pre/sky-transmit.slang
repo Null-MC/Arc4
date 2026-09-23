@@ -12,7 +12,7 @@ extern static const int BufferHeight;
 static const half historyBlendF = rcp(24.h);
 static const int sunTransmittanceSteps = 20;
 
-[[vk::image_format("rgba16f")]]
+[[vk::image_format("rgba16")]]
 RWTexture2D<half3> texSkyTransmit;
 
 

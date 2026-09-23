@@ -15,6 +15,7 @@ public class settings implements PackSettings {
         screen.option("SpecularEnabled", OptionType.boolType(true), false);
         screen.option("TAA_Enabled", OptionType.boolType(true), false);
         screen.option("Accumulation", OptionType.boolType(false), true);
+        screen.option("ColorSpace", OptionType.enumType("ColorSpaces", 0, "sRGB", "ACEScg"), true);
 
         subscreen(screen, "Sky", screen_sky -> {
             screen_sky.option("Sky_SunRadius", OptionType.floatType(0.004f, 0.060f, 0.001f, 0.009f), true);
@@ -25,6 +26,10 @@ public class settings implements PackSettings {
             screen_sky.option("Sky_PollutionColor_R", OptionType.floatType(0.0f, 1.0f, 0.05f, 0.0f), true);
             screen_sky.option("Sky_PollutionColor_G", OptionType.floatType(0.0f, 1.0f, 0.05f, 0.0f), true);
             screen_sky.option("Sky_PollutionColor_B", OptionType.floatType(0.0f, 1.0f, 0.05f, 0.0f), true);
+        });
+
+        subscreen(screen, "Material", screen_material -> {
+            screen_material.option("Material_Format", OptionType.enumType("MaterialFormats", 0, "None", "LabPbr", "OldPbr"), false);
         });
 
         subscreen(screen, "Sharc", screen_sharc -> {
@@ -45,7 +50,7 @@ public class settings implements PackSettings {
         subscreen(screen, "Exposure", screen_exposure -> {
             screen_exposure.option("Exposure_Min", OptionType.floatType(-6.0f, 0.0f, 0.2f, -3.0f), true);
             screen_exposure.option("Exposure_Max", OptionType.floatType(0.0f, 20.0f, 0.2f, 16.0f), true);
-            screen_exposure.option("Exposure_Offset", OptionType.floatType(-2.0f, 6.0f, 0.2f, 3.4f), true);
+            screen_exposure.option("Exposure_Offset", OptionType.floatType(-2.0f, 8.0f, 0.05f, 3.4f), true);
             screen_exposure.option("Debug_Exposure", OptionType.boolType(false), false);
         });
 

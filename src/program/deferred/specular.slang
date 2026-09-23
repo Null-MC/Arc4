@@ -66,10 +66,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         half4 specularMap = texDeferSpecular[globalPos];
 
-        float f0 = SpecularReader.f0(specularMap);
+        float f0 = getSpecularReader().f0(specularMap);
         float ior_current = f0_to_ior(f0);
 
-        float3 albedo = transformer.fromGamma(color.rgb);
+        float3 albedo = getColorSpace().fromGamma(color.rgb);
 
         float3 localViewDir = -normalize(localPos);
         float NoV = max(dot(tex_normal, localViewDir), 0.0);
@@ -79,9 +79,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float dither = BlueNoise::sampleAnimated1D(globalPos, 73, ap.timing.frameCounter);
         bool is_reflect = F_s >= dither;
 
+        float roughness = getSpecularReader().roughness(specularMap);
+        float alpha = max(roughness * roughness, 0.002);
         float3 rayViewDir;
-        float roughness = SpecularReader.roughness(specularMap);
-        float alpha = roughness * roughness;
+
         if (!is_reflect) {
             // refract
 
@@ -146,15 +147,15 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 let hitType = hit.getGeometryIndex();
                 if (hitType == HWRT.RTGeometryIndex.SOLID) {
                     query.acceptCandidate();
-                    break;
+                    continue;
                 }
 
                 let surface = HWRT.decodeHit(hit);
                 float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0);// * surface.getColor();
 
-                if (hitType == HWRT.RTGeometryIndex.CUTOUT && hit_color.a > 0.1) {
-                    query.acceptCandidate();
-                    break;
+                if (hitType == HWRT.RTGeometryIndex.CUTOUT) {
+                    if (hit_color.a >= 0.1) query.acceptCandidate();
+                    continue;
                 }
 
                 // transmitColor *= transformer.fromGamma(hit_color.rgb);
@@ -222,7 +223,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 let hit_color = surface.albedo().sampleLevel(hit_uv, 0.0) * surface.getColor();
                 if (hit_color.a > 0.9) break;
 
-                float3 tint = transformer.fromGamma(hit_color.rgb);
+                float3 tint = getColorSpace().fromGamma(hit_color.rgb);
                 // tint *= 1.0 - hit_color.a;
                 tint = lerp(1.0, tint, hit_color.a);
                 transmitColor *= tint;
@@ -232,7 +233,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
                 // TODO: re-refract
                 half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
-                float hit_f0 = SpecularReader.f0(hit_specular);
+                float hit_f0 = getSpecularReader().f0(hit_specular);
 
                 float hit_ior = is_air ? f0_to_ior(hit_f0) : 1.0;
                 // float hit_eta = (is_air ? 1.0 : ior_current) / hit_ior;
@@ -260,7 +261,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             // sky
             float3 skyPos = planet.getSkyPosition(localPos);
             float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
-            specular.rgb = transformer.fromLinear(skyColor);
+            specular.rgb = getColorSpace().fromLinear(skyColor);
 
             // specular.rgb += renderSun(rayDir, sunDir) * SunColor;
             traceDist = ap.camera.far;
@@ -292,7 +293,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
 
             float hit_smoothness = hit_specular.r;
-            float hit_metalness = SpecularReader.metalness(hit_specular);
+            float hit_metalness = getSpecularReader().metalness(hit_specular);
             hit_diffuse *= 1.0 - hit_metalness * sqrt(hit_smoothness);
 
             // let size = surface.albedo().getSize();
@@ -302,14 +303,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
             hit_diffuse += mat_emission(hit_specular);
 
-            specular.rgb = hit_diffuse * transformer.fromGamma(hit_albedo);
+            specular.rgb = hit_diffuse * getColorSpace().fromGamma(hit_albedo);
         }
 
         specular.rgb *= transmitColor;
 
         if (is_reflect) {
-            int hcm = SpecularReader.hcm(specularMap);
-            float metalness = SpecularReader.metalness(specularMap);
+            int hcm = getSpecularReader().hcm(specularMap);
+            float metalness = getSpecularReader().metalness(specularMap);
 
             float3 halfDir = normalize(localViewDir + sunDir);
             float VoH = max(dot(localViewDir, halfDir), 0.0);
@@ -328,9 +329,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float visibility = ggxG2OverG1(NoV, NoL, alpha);
             specular.rgb *= F_NoV * visibility;
 
-            specular.rgb += sampleDirectSun(
+            float3 sunSpecular = sampleDirectSun(
                 localPos,
-                geo_normal,
+                // geo_normal,
                 tex_normal,
                 localViewDir,
                 sunDir,
@@ -339,7 +340,11 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 F_VoH,
                 // albedo,
                 // metalness
-            ) * SunColor;
+            );
+
+            float3 sunDisk = renderSun(rayDir, sunDir);
+            float3 sunShadow = SampleShadow(localPos, geo_normal);
+            specular.rgb += lerp(sunDisk, sunSpecular, saturate(roughness*10.0)) * SunColor * sunShadow;
 
             // albedo tinting
             specular.rgb *= lerp(1.0, sqrt(albedo), metalness);
@@ -377,7 +382,7 @@ float F_schlick(const in float cos_theta, const in float f0, const in float f90)
 
 float3 sampleDirectSun(
     const in float3 localPos,
-    const in float3 geo_normal,
+    // const in float3 geo_normal,
     const in float3 tex_normal,
     const in float3 viewDir,
     const in float3 sunDir,
@@ -403,7 +408,7 @@ float3 sampleDirectSun(
     // float3 F = f0Color + (1.0 - f0Color) * pow5(1.0 - VoH);
     float3 brdf = F_VoH * D * G / max(4.0 * NoV * NoL, 1e-5);
 
-    float3 shadow = SampleShadow(localPos, geo_normal);
+    // float3 shadow = SampleShadow(localPos, geo_normal);
     // if (shadow == 0.0) return 0.0;
 
     const float sunHalfAngle = 0.00931;
@@ -411,7 +416,7 @@ float3 sampleDirectSun(
     float3 skyPos = planet.getSkyPosition(localPos);
     float3 sunRadiance = SunColor * planet.sampleTransmit(skyPos, sunDir);
 
-    return sunRadiance * brdf * NoL * sunSolidAngle * shadow;
+    return sunRadiance * brdf * NoL * sunSolidAngle;// * shadow;
 }
 
 float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const in float3 localNormal) {
@@ -434,18 +439,18 @@ float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const i
 
         if (hitType == HWRT.RTGeometryIndex.SOLID) {
             query.acceptCandidate();
-            break;
+            continue;
         }
 
         let surface = HWRT.decodeHit(hit);
         float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
 
-        if (hitType == HWRT.RTGeometryIndex.CUTOUT && hit_color.a >= 0.1) {
-            query.acceptCandidate();
-            break;
+        if (hitType == HWRT.RTGeometryIndex.CUTOUT) {
+            if (hit_color.a >= 0.1) query.acceptCandidate();
+            continue;
         }
 
-        float3 tint = transformer.fromGamma(hit_color.rgb);
+        float3 tint = getColorSpace().fromGamma(hit_color.rgb);
         tint *= 1.0 - hit_color.a;
         // tint = lerp(1.0, tint, hit_color.a);
         transmitColor *= tint;
@@ -457,7 +462,7 @@ float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const i
         float3 skyPos = planet.getSkyPosition(localPos);
         float3 sunDir = normalize(ap.celestial.sunPosition);
         float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
-        diffuse = transformer.fromLinear(skyColor);
+        diffuse = getColorSpace().fromLinear(skyColor);
     }
     else {
         // hit

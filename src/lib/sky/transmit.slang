@@ -25,7 +25,7 @@ namespace HillaireSky {
 
         float2 texcoord;
         texcoord.x = dot(sunDir, up);
-        // texcoord.x = pow(abs(texcoord.x), (1.0/3.0)) * sign(texcoord.x);
+        texcoord.x = pow(abs(texcoord.x), (1.0/3.0)) * sign(texcoord.x);
         texcoord.x = texcoord.x * 0.5 + 0.5;
 
         texcoord.y = planet.getNormalizedHeight(world_y);
@@ -34,7 +34,7 @@ namespace HillaireSky {
 
     public void fromTransmitCoord(const in float2 texcoord, const in PlanetBuffer planet, out float3 skyPos, out float3 sunDir) {
         float sunCosTheta = 2.0*texcoord.x - 1.0;
-        // sunCosTheta = pow3(sunCosTheta);// * sign(sunCosTheta);
+        sunCosTheta = pow3(sunCosTheta);// * sign(sunCosTheta);
 
         float sunTheta = safeacos(sunCosTheta);
         float height_KM = planet.getWorldHeight(texcoord.y);

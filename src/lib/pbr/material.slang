@@ -1,13 +1,29 @@
 public module material;
 
+import settings;
 import lib.common;
 
 
-static const ISpecularReader SpecularReader = LabPbr();
+// #if MATERIAL_FORMAT == 2
+// static const ISpecularReader SpecularReader = getSpecularReader();
+// #else
+// static const ISpecularReader SpecularReader = getSpecularReader();
+// #endif
+
+static ISpecularReader getSpecularReader() {
+    switch (userSettings.Material_Format) {
+        case MaterialFormats.LabPbr:
+            return LabPbr();
+        case MaterialFormats.OldPbr:
+            return OldPbr();
+        default:
+            return DefaultPbr();
+    }
+}
 
 
 float mat_emission(const in half4 specularMap) {
-    float emission = SpecularReader.emission(specularMap);
+    float emission = getSpecularReader().emission(specularMap);
     return emission * 200.0;
 }
 
@@ -18,6 +34,7 @@ interface ISpecularReader {
     int hcm(const in half4 specularMap);
     float metalness(const in half4 specularMap);
     float emission(const in half4 specularMap);
+    float porosity(const in half4 specularMap);
     float sss(const in half4 specularMap);
 }
 
@@ -40,6 +57,10 @@ struct LabPbr : ISpecularReader {
 
     float emission(const in half4 specularMap) {
         return fract(specularMap.a);
+    }
+
+    float porosity(const in half4 specularMap) {
+        return specularMap.b * (255.0/64.0) * step(specularMap.b, (64.5/255.0));
     }
 
     float sss(const in half4 specularMap) {
@@ -69,6 +90,10 @@ struct OldPbr : ISpecularReader {
         return specularMap.b;
     }
 
+    float porosity(const in half4 specularMap) {
+        return 0.0;
+    }
+
     float sss(const in half4 specularMap) {
         return 0.0;
     }
@@ -92,6 +117,10 @@ struct DefaultPbr : ISpecularReader {
     }
 
     float emission(const in half4 specularMap) {
+        return 0.0;
+    }
+
+    float porosity(const in half4 specularMap) {
         return 0.0;
     }
 

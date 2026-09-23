@@ -28,9 +28,21 @@ struct SceneBuffer {
 
 ConstantBuffer<SceneBuffer, ScalarDataLayout> scene;
 
+enum ColorSpaces {
+    sRGB,
+    ACEScg
+};
+
+enum MaterialFormats {
+    None,
+    LabPbr,
+    OldPbr
+};
+
 internal extern static const bool value_Bloom_Enabled;
 internal extern static const bool value_Debug_Exposure;
 internal extern static const bool value_Debug_SkyLuts;
+internal extern static const int value_Material_Format;
 internal extern static const bool value_Reblur_Enabled;
 internal extern static const bool value_Sharc_Enabled;
 internal extern static const bool value_SpecularEnabled;
@@ -40,6 +52,7 @@ internal extern static const bool value_VolumetricEnabled;
 struct Settings {
     bool Accumulation;
     float Bloom_Strength;
+    ColorSpaces ColorSpace;
     bool Debug_SHARC;
     bool Debug_WhiteWorld;
     float Exposure_Max;
@@ -59,6 +72,7 @@ struct Settings {
     static const bool Bloom_Enabled = value_Bloom_Enabled;
     static const bool Debug_Exposure = value_Debug_Exposure;
     static const bool Debug_SkyLuts = value_Debug_SkyLuts;
+    static const MaterialFormats Material_Format = MaterialFormats(value_Material_Format);
     static const bool Reblur_Enabled = value_Reblur_Enabled;
     static const bool Sharc_Enabled = value_Sharc_Enabled;
     static const bool SpecularEnabled = value_SpecularEnabled;

@@ -37,7 +37,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
 
     // Slightly scale down the view position to avoid precision issues.
-    viewPos *= 0.99;
+    // viewPos *= 0.99;
 
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
@@ -64,7 +64,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         diffuse.rgb = directLight * SampleShadowDisc(globalPos, localPos, geo_normal);
 
         half4 specularMap = texDeferSpecular[globalPos];
-        float sss = SpecularReader.sss(specularMap);
+        float sss = getSpecularReader().sss(specularMap);
 
         const int SampleCount = 1;
 
@@ -90,29 +90,36 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 0.0,
                 max(ap.world.renderDistance, 1.0),
                 HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-                HWRT.RTFlags.NONE);
+                HWRT.RTFlags.USE_TWO_STATE_OMM);
             
             float3 transmitColor = 1.0;
             while (query.proceed()) {
                 let hit = query.getCandidate();
-                let surface = HWRT.decodeHit(hit);
+                let hitType = hit.getGeometryIndex();
+                if (hitType == HWRT.RTGeometryIndex.SOLID) {
+                    query.acceptCandidate();
+                    continue;
+                }
 
+                let surface = HWRT.decodeHit(hit);
                 float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
 
-                if (hit_color.a >= 0.99) query.acceptCandidate();
-                else {
-                    float3 tint = transformer.fromGamma(hit_color.rgb);
-                    tint *= 1.0 - hit_color.a;
-                    // tint = lerp(1.0, tint, hit_color.a);
-                    transmitColor *= tint;
+                if (hitType == HWRT.RTGeometryIndex.CUTOUT) {
+                    if (hit_color.a >= 0.1) query.acceptCandidate();
+                    continue;
                 }
+
+                float3 tint = getColorSpace().fromGamma(hit_color.rgb);
+                tint *= 1.0 - hit_color.a;
+                // tint = lerp(1.0, tint, hit_color.a);
+                transmitColor *= tint;
             }
 
             float3 sampleDiffuse;
             if (!query.hasHit()) {
                 float3 skyPos = planet.getSkyPosition(localPos);
                 float3 skyColor = planet.sampleView(skyPos, rayDir, normalize(ap.celestial.sunPosition));
-                sampleDiffuse = transformer.fromLinear(skyColor);
+                sampleDiffuse = getColorSpace().fromLinear(skyColor);
             }
             else {
                 var hit = query.getHit();
@@ -147,7 +154,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
                 hitDiffuse += mat_emission(hit_specular);
                 
-                sampleDiffuse = hitDiffuse * transformer.fromGamma(hit_albedo);
+                sampleDiffuse = hitDiffuse * getColorSpace().fromGamma(hit_albedo);
             }
 
             diffuse.rgb += sampleDiffuse * transmitColor;

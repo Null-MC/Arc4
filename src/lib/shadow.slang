@@ -17,26 +17,26 @@ float3 _SampleShadow(const in float3 localPos, const in float3 geo_normal, const
         0.0,
         max(ap.world.renderDistance, 1.0),
         HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
-        HWRT.RTFlags.NONE);
+        HWRT.RTFlags.CULL_BACK_FACES);
     
     while (query.proceed()) {
         let hit = query.getCandidate();
         let hitType = hit.getGeometryIndex();
         if (hitType == HWRT.RTGeometryIndex.SOLID) {
             query.acceptCandidate();
-            break;
+            continue;
         }
 
         let surface = HWRT.decodeHit(hit);
         float2 hit_uv = surface.getUV();
         let hit_color = surface.albedo().sampleLevel(hit_uv, 0.0) * surface.getColor();
 
-        if (hitType == HWRT.RTGeometryIndex.CUTOUT && hit_color.a >= 0.1) {
-            query.acceptCandidate();
-            break;
+        if (hitType == HWRT.RTGeometryIndex.CUTOUT) {
+            if (hit_color.a >= 0.1) query.acceptCandidate();
+            continue;
         }
 
-        float3 tint = transformer.fromGamma(hit_color.rgb);
+        float3 tint = getColorSpace().fromGamma(hit_color.rgb);
         // tint *= 1.0 - hit_color.a;
         // tint = lerp(1.0, tint*tint, hit_color.a);
         color *= tint;

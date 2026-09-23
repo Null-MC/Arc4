@@ -1,6 +1,7 @@
 public module common;
 
 import aperture;
+import settings;
 import lib.color_transformer;
 import lib.aces;
 
@@ -11,8 +12,14 @@ static const float SamplingBias = -1.0;
 
 static const float3 WaterAbsorb = float3(0.35, 0.07, 0.03);
 
-// static const ColorTransformer transformer = new sRGB_Transformer();
-static const ColorTransformer transformer = new ACES_Transformer();
+ColorTransformer getColorSpace() {
+    switch (userSettings.ColorSpace) {
+        case ColorSpaces.ACEScg:
+            return new ACEScg_Transformer();
+        default:
+            return new sRGB_Transformer();
+    }
+}
 
 
 float luminance(const in float3 color) {
