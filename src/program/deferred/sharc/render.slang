@@ -109,10 +109,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                     continue;
                 }
 
-                float3 tint = getColorSpace().fromGamma(hit_color.rgb);
-                tint *= 1.0 - hit_color.a;
-                // tint = lerp(1.0, tint, hit_color.a);
-                transmitColor *= tint;
+                float3 hit_albedo = getColorSpace().fromGamma(hit_color.rgb);
+                transmitColor *= getGlassTint(hit_albedo, hit_color.a);
             }
 
             float3 sampleDiffuse;

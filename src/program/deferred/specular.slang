@@ -50,7 +50,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
 
     // Slightly scale down the view position to avoid precision issues.
-    viewPos *= 0.99;
+    // viewPos *= 0.99;
 
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
@@ -135,9 +135,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (MaxRefractInterfaces <= 1) {
             // simple
             query = HWRT.startQuery(
-                localPos + (is_reflect ? 0.002 : -0.002) * geo_normal,
+                localPos + (is_reflect ? 0.008 * localViewDir : -0.002 * geo_normal),
                 rayDir,
-                0.002,
+                0.0,
                 max(ap.world.renderDistance, 1.0),
                 HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
                 HWRT.RTFlags.NONE);
@@ -158,7 +158,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                     continue;
                 }
 
-                // transmitColor *= transformer.fromGamma(hit_color.rgb);
+                float3 hit_albedo = getColorSpace().fromGamma(hit_color.rgb);
+                transmitColor *= getGlassTint(hit_albedo, hit_color.a);
             }
 
             // if (query.hasHit()) {
@@ -223,10 +224,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 let hit_color = surface.albedo().sampleLevel(hit_uv, 0.0) * surface.getColor();
                 if (hit_color.a > 0.9) break;
 
-                float3 tint = getColorSpace().fromGamma(hit_color.rgb);
-                // tint *= 1.0 - hit_color.a;
-                tint = lerp(1.0, tint, hit_color.a);
-                transmitColor *= tint;
+                float3 hit_albedo = getColorSpace().fromGamma(hit_color.rgb);
+                transmitColor *= getGlassTint(hit_albedo, hit_color.a);
 
                 float3 hit_localPos = surface.getPos();
                 float3 hit_localNormal = surface.getNormal();
@@ -363,7 +362,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             }
             else {
                 // everything else
-                specular.rgb *= lerp(1.0, albedo, color.a);
+                specular.rgb *= getGlassTint(albedo, color.a);
             }
 
             // specular.rgb *= 1.0 - color.a;
@@ -450,10 +449,8 @@ float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const i
             continue;
         }
 
-        float3 tint = getColorSpace().fromGamma(hit_color.rgb);
-        tint *= 1.0 - hit_color.a;
-        // tint = lerp(1.0, tint, hit_color.a);
-        transmitColor *= tint;
+        float3 hit_albedo = getColorSpace().fromGamma(hit_color.rgb);
+        transmitColor *= getGlassTint(hit_albedo, hit_color.a);
     }
 
     float3 diffuse;

@@ -36,10 +36,8 @@ float3 _SampleShadow(const in float3 localPos, const in float3 geo_normal, const
             continue;
         }
 
-        float3 tint = getColorSpace().fromGamma(hit_color.rgb);
-        // tint *= 1.0 - hit_color.a;
-        // tint = lerp(1.0, tint*tint, hit_color.a);
-        color *= tint;
+        float3 hit_albedo = getColorSpace().fromGamma(hit_color.rgb);
+        color *= getGlassTint(hit_albedo, hit_color.a);
     }
 
     if (query.hasHit()) return 0.0;

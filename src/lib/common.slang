@@ -86,3 +86,10 @@ float3 mul_project(const in float4x4 matrix, const in float3 vector) {
 float lengthSq(float3 vec) {
     return dot(vec, vec);
 }
+
+float3 getGlassTint(const in float3 albedo, const in float alpha) {
+    float3 tint = albedo.rgb;
+    tint = lerp(1.0, normalize(tint), alpha);
+    tint *= 1.0 - alpha;
+    return tint;
+}
