@@ -29,7 +29,7 @@ public class settings implements PackSettings {
         });
 
         subscreen(screen, "Material", screen_material -> {
-            screen_material.option("Material_Format", OptionType.enumType("MaterialFormats", 0, "None", "LabPbr", "OldPbr"), false);
+            screen_material.option("Material_Format", OptionType.enumType("MaterialFormats", 1, "None", "LabPbr", "OldPbr"), false);
         });
 
         subscreen(screen, "Sharc", screen_sharc -> {
@@ -39,7 +39,7 @@ public class settings implements PackSettings {
         });
         
         subscreen(screen, "Reblur", screen_reblur -> {
-            screen_reblur.option("Reblur_Enabled", OptionType.boolType(true), false);
+            screen_reblur.option("Reblur_Enabled", OptionType.boolType(false), false);
         });
 
         subscreen(screen, "Bloom", screen_bloom -> {
