@@ -29,6 +29,7 @@ public class Resources {
 
     public final Texture2D mainTexture_A;
     public final Texture2D mainTexture_B;
+    public final Texture2D weatherTexture;
 
     public final MappedBuffer<SceneBuffer> bufferScene;
 
@@ -62,6 +63,10 @@ public class Resources {
             .renderSize()
             .create();
 
+        weatherTexture = pipeline.texture2D("texWeather", TextureFormat.RGBA16_SFLOAT)
+            .renderSize()
+            .create();
+
         // Raw noisy diffuse GI sample for this frame: rgb = color, a = normalized hit distance.
         texDiffuse_A = pipeline.texture2D("texDiffuse_A", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
@@ -81,10 +86,12 @@ public class Resources {
 
         mainTexture_A = pipeline.texture2D("mainTexture_A", TextureFormat.RGBA16_SFLOAT)
             .windowSize()
+            .usesMipmaps()
             .create();
-        
+
         mainTexture_B = pipeline.texture2D("mainTexture_B", TextureFormat.RGBA16_SFLOAT)
             .windowSize()
+            .usesMipmaps()
             .create();
 
         if (pipeline.settings().getBoolValue("TAA_Enabled")) {

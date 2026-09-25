@@ -1,5 +1,8 @@
 import java.util.function.Consumer;
 
+import org.joml.Vector4f;
+import org.joml.Vector4fc;
+
 import dev.irisshaders.aperture.api.*;
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.*;
@@ -23,7 +26,7 @@ public class main implements ShaderPack {
     private Exposure exposure;
     private Froxels froxels;
     private Bloom bloom;
-    private Water water;
+    // private Water water;
     private Sharc sharc;
     private ReBLUR reblur;
     private Resources resources;
@@ -44,7 +47,7 @@ public class main implements ShaderPack {
 
         sky = new HillaireSky(pipeline);
         exposure = new Exposure(screen, pipeline);
-        water = new Water(pipeline);
+        new Water(pipeline);
 
         if (settings.getBoolValue("Froxels_Enabled")) {
             froxels = new Froxels(screen, pipeline);
@@ -66,6 +69,8 @@ public class main implements ShaderPack {
             sky.renderTransmit(stage);
             sky.renderMultiScatter(stage);
             sky.renderView(stage);
+
+            stage.clearTo(new Vector4f(0f), resources.weatherTexture);
         });
         
         pipeline.object(ProgramUsage.SKYBOX, "program/object/discard", "DiscardShader");
@@ -85,9 +90,8 @@ public class main implements ShaderPack {
             .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
             .writes("data", resources.texDeferData, BlendMode.NONE);
 
-        // pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/basic", "BasicShader")
-        //     .writes("color", mainTexture)
-        //     .exportInt("CASCADE_COUNT", CASCADE_COUNT);
+        pipeline.object(ProgramUsage.WEATHER, "program/object/weather", "WeatherShader")
+            .writes("color", resources.weatherTexture);
         
         withStage(pipeline, ProgramStage.POST_RENDER, stage -> {
             var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
@@ -116,7 +120,6 @@ public class main implements ShaderPack {
 
                 specularFlipper.flip();
             }
-
             
             stage.compute("Deferred-Composite", "program/deferred/composite", "main")
                 .overrideObject("texDiffuse_read", reblur != null ? reblur.resultName() : diffuseFlipper.getReader().name())
@@ -144,6 +147,15 @@ public class main implements ShaderPack {
 
                 mainFlipper.flip();
             }
+
+            stage.generateMips(mainFlipper.getReader());
+
+            stage.compute("Overlay", "program/deferred/overlay", "main")
+                .overrideObject("texMain_read", mainFlipper.getReader().name())
+                .overrideObject("texMain_write", mainFlipper.getWriter().name())
+                .dispatch2D(sizeX_16, sizeY_16);
+
+            mainFlipper.flip();
 
             if (settings.getBoolValue("TAA_Enabled")) {
                 stage.compute("TAA", "program/post/taa", "main")
