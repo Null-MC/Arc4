@@ -70,7 +70,7 @@ float3 getWaterNormal(const in float3 localPos, const in float3 geo_normal) {
     float3 worldPos = localPos + ap.camera.position;
 
     float strength = texWaterNoiseB.Sample(samplerWater, worldPos.xz * 0.014).r;
-    strength = strength * 0.4;
+    strength = strength * 0.25;
 
     // 1. Calculate the procedural height at the exact current pixel position
     float height = strength * GetWaveHeight(worldPos, 1.0, 28).y;

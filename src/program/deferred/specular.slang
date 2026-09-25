@@ -119,9 +119,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 geoViewNormal = mul(float3x3(ap.camera.view), geo_normal);
             if (dot(rayViewDir, geoViewNormal) <= 0.0) {
                 // TODO: terminate instead of geometry?
-                // rayViewDir = reflect(viewDir, geoViewNormal);
-                texSpecular_write[globalPos] = 0.0;
-                return;
+                rayViewDir = reflect(viewDir, geoViewNormal);
+                // texSpecular_write[globalPos] = 0.0;
+                // return;
             }
         }
 
