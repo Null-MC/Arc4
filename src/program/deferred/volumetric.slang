@@ -3,6 +3,7 @@ import settings;
 import lib.common;
 import lib.noise.ign;
 import lib.froxel;
+import lib.shadow;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.multiscatter;
@@ -26,6 +27,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float2 texcoord = (globalPos + 0.5) / ap.game.screenSize;
     float depth = ap.depth[globalPos];
+
+    if (userSettings.TAA_Enabled) {
+        texcoord -= scene.TAA_jitter;
+    }
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
@@ -57,6 +62,17 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     float3 viewDir = normalize(viewPos);
     float3 viewPosEndNear = viewDir * traceDistanceNear;
 
+    float3 sunDir = normalize(ap.celestial.sunPosition);
+    float3 moonDir = normalize(ap.celestial.moonPosition);
+
+    float cosTheta_sun = dot(localViewDir, sunDir);
+    float miePhaseValue_sun = getMiePhase(cosTheta_sun);
+    float rayleighPhaseValue_sun = getRayleighPhase(cosTheta_sun);
+
+    float cosTheta_moon = dot(localViewDir, moonDir);
+    float miePhaseValue_moon = getMiePhase(cosTheta_moon);
+    float rayleighPhaseValue_moon = getRayleighPhase(cosTheta_moon);
+
     float dither = IGN::getAnimated(globalPos);
 
     float3 scattering = 0.0;
@@ -73,17 +89,31 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float altitude_KM = planet.getSkyAltitude(skyPos_trace);
         sky.Sample(altitude_KM, skySample);
 
-        float3 sampleTransmittance = exp(-stepSizeNear_KM * skySample.extinction);
+        float3 sampleTransmittance = exp(-max(stepSizeNear_KM * skySample.extinction, 0.0));
 
-        float3 trace_viewPos = viewPosEndNear * stepF;
-        float3 ndcPos = mul_project(ap.camera.projection, trace_viewPos);
-        float3 trace_bufferPos = Froxel_GetBufferPosition(ndcPos);
-        float3 froxel_uv = trace_bufferPos / Froxel_Resolution;
+        float3 inScattering;
+        if (userSettings.Froxels_Enabled) {
+            float3 trace_viewPos = viewPosEndNear * stepF;
+            float3 ndcPos = mul_project(ap.camera.projection, trace_viewPos);
+            float3 trace_bufferPos = Froxel_GetBufferPosition(ndcPos);
+            float3 froxel_uv = trace_bufferPos / Froxel_Resolution;
 
-        float3 inScattering = texFroxel_write.Sample(froxelSampler, froxel_uv).rgb;
+            inScattering = texFroxel_write.Sample(froxelSampler, froxel_uv).rgb;
+        }
+        else {
+            float3 shadowF = SampleShadow(localPos_trace, 0.0);
+
+            float3 sunLight = getColorSpace().fromLinear(planet.sampleTransmit(skyPos_trace, sunDir) * SunColor);
+            float3 moonLight = getColorSpace().fromLinear(planet.sampleTransmit(skyPos_trace, moonDir) * MoonColor);
+
+            inScattering = skySample.mieScattering * (miePhaseValue_sun * sunLight + miePhaseValue_moon * moonLight) * shadowF + Sky_MinLight;
+
+            float cameraSkyLight = ap.camera.brightness.y;
+            inScattering += getColorSpace().fromLinear(planet.sampleMultiScatter(skyPos, sunDir)) * cameraSkyLight;
+        }
 
         // Integrated scattering within path segment.
-        float3 scatteringIntegral = inScattering * ((1.0 - sampleTransmittance) / max(skySample.extinction, 1e-5));
+        float3 scatteringIntegral = inScattering * (saturate(1.0 - sampleTransmittance) / max(skySample.extinction, 1e-3));
 
         scattering += scatteringIntegral * transmittance;
         
@@ -91,16 +121,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     }
 
     if (traceDistanceFar > 0.0) {
-        float3 sunDir = normalize(ap.celestial.sunPosition);
-        float cosTheta_sun = dot(localViewDir, sunDir);
-        float miePhaseValue_sun = getMiePhase(cosTheta_sun);
-        float rayleighPhaseValue_sun = getRayleighPhase(cosTheta_sun);
-
-        float3 moonDir = normalize(ap.celestial.moonPosition);
-        float cosTheta_moon = dot(localViewDir, moonDir);
-        float miePhaseValue_moon = getMiePhase(cosTheta_moon);
-        float rayleighPhaseValue_moon = getRayleighPhase(cosTheta_moon);
-
         float stepSizeFar_KM = traceDistanceFar_KM / VL_FarSampleCount;
 
         for (int i = 0; i < VL_FarSampleCount; i++) {
@@ -116,10 +136,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 sampleTransmittance = exp(-stepSizeFar_KM * skySample.extinction);
 
-            float3 sunTransmittanceLux = planet.sampleTransmit(skyPos_trace, sunDir) * SunColor;
-            float3 moonTransmittanceLux = planet.sampleTransmit(skyPos_trace, -sunDir) * MoonColor;
+            float3 sunTransmittanceLux = getColorSpace().fromLinear(planet.sampleTransmit(skyPos_trace, sunDir) * SunColor);
+            float3 moonTransmittanceLux = getColorSpace().fromLinear(planet.sampleTransmit(skyPos_trace, -sunDir) * MoonColor);
+            float3 psiMS = getColorSpace().fromLinear(planet.sampleMultiScatter(skyPos_trace, sunDir) + Sky_MinLight);
 
-            float3 psiMS = planet.sampleMultiScatter(skyPos_trace, sunDir) + Sky_MinLight;
             //vec3 psiMS_moon = getValFromMultiScattLUT(texSkyMultiScatter, newPos, sunDir);
 
             float3 rayleighInScattering_sun = rayleighPhaseValue_sun * sunTransmittanceLux;
@@ -132,7 +152,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                             + skySample.mieScattering * (mieInScattering_sun + mieInScattering_moon + psiMS);
 
             // Integrated scattering within path segment.
-            float3 scatteringIntegral = inScattering * ((1.0 - sampleTransmittance) / max(skySample.extinction, 1e-5));
+            float3 scatteringIntegral = inScattering * (saturate(1.0 - sampleTransmittance) / max(skySample.extinction, 1e-3));
 
             scattering += scatteringIntegral * transmittance;
             
@@ -142,8 +162,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 color = texMain_read[globalPos];
 
-    color = color * transmittance + getColorSpace().fromLinear(scattering);
-
+    // scattering = getColorSpace().fromLinear(scattering);
+    // transmittance = getColorSpace().fromLinear(transmittance);
+    color = color * transmittance + scattering;
+    
     color = clamp(color, 0.0, half.maxValue);
 
     texMain_write[globalPos] = color;

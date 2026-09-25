@@ -4,11 +4,11 @@ import aperture;
 import lib.common;
 // import lib.sampling.depth;
 
-extern static const int Froxel_Width;
-extern static const int Froxel_Height;
-extern static const int Froxel_Depth;
+extern static const int Froxel_Width = 0;
+extern static const int Froxel_Height = 0;
+extern static const int Froxel_Depth = 0;
 
-static const float Froxel_MaxDist = 80.0;
+// static const float Froxel_MaxDist = 80.0;
 
 static const uint3 Froxel_Resolution = uint3(Froxel_Width, Froxel_Height, Froxel_Depth);
 

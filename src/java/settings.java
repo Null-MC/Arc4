@@ -11,11 +11,9 @@ public class settings implements PackSettings {
 	public void createSettings(SettingsManager manager, SettingsScreen screen) {
         screen.option("SunAngle", OptionType.floatType(-90.0f, 90.0f, 2.0f, 2.0f), true);
         screen.option("SeaLevel", OptionType.floatType(0.0f, 256.0f, 5.0f, 60.0f), true);
-        screen.option("VolumetricEnabled", OptionType.boolType(true), false);
-        screen.option("SpecularEnabled", OptionType.boolType(true), false);
         screen.option("TAA_Enabled", OptionType.boolType(true), false);
         screen.option("Accumulation", OptionType.boolType(false), true);
-        screen.option("ColorSpace", OptionType.enumType("ColorSpaces", 0, "sRGB", "ACEScg"), true);
+        screen.option("ColorSpace", OptionType.enumType("ColorSpaces", 1, "sRGB", "ACEScg"), true);
 
         subscreen(screen, "Sky", screen_sky -> {
             screen_sky.option("Sky_SunRadius", OptionType.floatType(0.004f, 0.060f, 0.001f, 0.009f), true);
@@ -32,14 +30,23 @@ public class settings implements PackSettings {
             screen_material.option("Material_Format", OptionType.enumType("MaterialFormats", 1, "None", "LabPbr", "OldPbr"), false);
         });
 
-        subscreen(screen, "Sharc", screen_sharc -> {
-            screen_sharc.option("Sharc_Enabled", OptionType.boolType(true), false);
-            screen_sharc.option("Sharc_BucketSize", OptionType.floatType(new float[]{0.125f, 0.25f, 0.50f, 1.00f}, 0.5f), true);
-            screen_sharc.option("Debug_SHARC", OptionType.boolType(false), true);
-        });
-        
-        subscreen(screen, "Reblur", screen_reblur -> {
-            screen_reblur.option("Reblur_Enabled", OptionType.boolType(false), false);
+        subscreen(screen, "Lighting", screen_lighting -> {
+            screen_lighting.option("SpecularEnabled", OptionType.boolType(true), false);
+
+            subscreen(screen_lighting, "Sharc", screen_sharc -> {
+                screen_sharc.option("Sharc_Enabled", OptionType.boolType(true), false);
+                screen_sharc.option("Sharc_BucketSize", OptionType.floatType(new float[]{0.125f, 0.25f, 0.50f, 1.00f}, 0.5f), true);
+                screen_sharc.option("Debug_SHARC", OptionType.boolType(false), true);
+            });
+            
+            subscreen(screen_lighting, "Reblur", screen_reblur -> {
+                screen_reblur.option("Reblur_Enabled", OptionType.boolType(false), false);
+            });
+            
+            subscreen(screen_lighting, "Volumetric", screen_volumetric -> {
+                screen_volumetric.option("Volumetric_Enabled", OptionType.boolType(true), false);
+                screen_volumetric.option("Froxels_Enabled", OptionType.boolType(false), false);
+            });
         });
 
         subscreen(screen, "Bloom", screen_bloom -> {

@@ -4,10 +4,9 @@ option.SunAngle=Sun Angle
 suffix.SunAngle=°
 option.SeaLevel=Sea Level
 suffix.SeaLevel=m
-option.SpecularEnabled=Specular Lighting
-option.VolumetricEnabled=Volumetric Lighting
 option.TAA_Enabled=TAA
 option.Accumulation=Accumulation
+option.ColorSpace=Color Space
 
 screen.Sky=Sky
 option.Sky_SunRadius=Sun Radius
@@ -22,14 +21,21 @@ option.Sky_PollutionColor_B=Pollution Blue
 screen.Material=Material
 option.Material_Format=Format
 
-screen.Sharc=SHaRC
-option.Sharc_Enabled=Enabled
-option.Sharc_BucketSize=Bucket Size
-suffix.Sharc_BucketSize=m
-option.Debug_SHARC=Debug
+screen.Lighting=Lighting
+option.SpecularEnabled=Specular Lighting
 
-screen.Reblur=ReBLUR
-option.Reblur_Enabled=Enabled
+    screen.Sharc=SHaRC
+    option.Sharc_Enabled=Enabled
+    option.Sharc_BucketSize=Bucket Size
+    suffix.Sharc_BucketSize=m
+    option.Debug_SHARC=Debug
+
+    screen.Reblur=ReBLUR
+    option.Reblur_Enabled=Enabled
+
+    screen.Volumetric=Volumetric
+    option.Volumetric_Enabled=Enabled
+    option.Froxels_Enabled=Froxels
 
 screen.Bloom=Bloom
 option.Bloom_Enabled=Enabled

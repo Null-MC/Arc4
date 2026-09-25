@@ -64,7 +64,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         if (ap.camera.fluid == 1) {
             float viewDist = length(viewPos);
-            color.rgb *= exp(-viewDist * WaterAbsorb);
+            // color.rgb *= exp(-viewDist * WaterAbsorb);
+            float3 waterAbsorbption = exp(-viewDist * WaterAbsorb);
+            color.rgb *= getColorSpace().fromLinear(waterAbsorbption);
         }
 
         if (userSettings.Debug_SHARC && userSettings.Sharc_Enabled) {
@@ -113,7 +115,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             color.rgb *= getColorSpace().fromLinear(transmit);
         }
 
-        if (!userSettings.VolumetricEnabled) {
+        if (!userSettings.Volumetric_Enabled) {
             float3 skyColor = planet.sampleView(skyPos, localViewDir, sunDir);
             color.rgb += getColorSpace().fromLinear(skyColor);
         }

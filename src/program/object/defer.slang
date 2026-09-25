@@ -4,7 +4,7 @@ import object_shader;
 import lib.common;
 import lib.octohedral;
 import lib.ray_cone;
-
+import lib.water;
 
 extern static const bool IsTranslucent = false;
 
@@ -104,8 +104,10 @@ struct DeferShader : Shader<VertexData, FragmentData> {
         if (input.blockId == 1) {
             // water
             color = 0.0h;
-            tex_normal = geo_normal;
+            // tex_normal = geo_normal;
             specular = half4(1.0h, 0.02h, 0.0h, 0.0h);
+
+            tex_normal = getWaterNormal(input.pos, geo_normal);
         }
 
         if (!IsTranslucent) color.a = 1.0h;

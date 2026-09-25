@@ -41,8 +41,12 @@ void main(ComputeInput input) {
 
     float3 ndcPos = Froxel_GetNdcPosition(bufferPos);
 
-    float depth = ap.depth.sampleNearest(ndcPos.xy * 0.5 + 0.5);
-    if (depth > 0.0) ndcPos.z = max(ndcPos.z, depth);
+    // float depth = ap.depth.sampleNearest(ndcPos.xy * 0.5 + 0.5);
+    // if (depth > 0.0) {
+    //     ndcPos.z = ap.camera.near / ndcPos.z;
+    //     ndcPos.z = max(ndcPos.z, depth + 0.2);
+    //     ndcPos.z = ap.camera.near / ndcPos.z;
+    // }
 
     float3 viewPos = mul_project(ap.camera.projectionInv, ndcPos);
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
@@ -78,7 +82,7 @@ void main(ComputeInput input) {
         float altitude_KM = planet.getSkyAltitude(traceSkyPos);
         sky.Sample(altitude_KM, skySample);
 
-        float3 sampleTransmittance = exp(-stepDist * skySample.extinction);
+        float3 sampleTransmittance = exp(-max(stepDist * skySample.extinction, 0.0));
 
         // Integrate within each segment.
         // float3 scatteringNoPhase = skySample.rayleighScattering + skySample.mieScattering;
@@ -91,7 +95,7 @@ void main(ComputeInput input) {
         float3 inScattering = skySample.mieScattering * (miePhase_sun * sunLight + miePhase_moon * moonLight) + Sky_MinLight;
 
         // Integrated scattering within path segment.
-        float3 scatteringIntegral = (inScattering - inScattering * sampleTransmittance) / skySample.extinction;
+        float3 scatteringIntegral = (inScattering * saturate(1.0 - sampleTransmittance)) / max(skySample.extinction, 1e-3);
 
         scattering += scatteringIntegral * transmittance;
         transmittance *= sampleTransmittance;
@@ -127,7 +131,8 @@ void main(ComputeInput input) {
     }
     else {
         float cameraSkyLight = ap.camera.brightness.y;
-        indirect = planet.sampleMultiScatter(skyPos, sunDir) * cameraSkyLight;
+        indirect = planet.sampleMultiScatter(skyPos, sunDir);
+        indirect = getColorSpace().fromLinear(indirect) * cameraSkyLight;
     }
 
 
@@ -152,7 +157,9 @@ void main(ComputeInput input) {
     }
 
     half counter = (half)clamp(froxelPrev.a + 1.0, 1.0, Froxel_MaxFrames);
-    half3 final = lerp(froxelPrev.rgb, half3(scattering), rcp(counter));
+    float3 final = ap.timing.frameCounter > 0 ? lerp(froxelPrev.rgb, half3(scattering), rcp(counter)) : half3(scattering);
+
+    final = clamp(final, 0.0, half.maxValue);
 
     texFroxel_write[input.globalPos] = half4(final, counter);
 }

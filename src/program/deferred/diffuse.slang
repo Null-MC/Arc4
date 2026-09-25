@@ -41,9 +41,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
-
-    // Slightly scale down the view position to avoid precision issues.
-    // viewPos *= 0.99;
     
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
@@ -54,23 +51,21 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 geo_normal = octohedral::decode(normalData.xy);
         float3 tex_normal = octohedral::decode(normalData.zw);
 
-        // localPos += 0.002 * geo_normal;
-
         float3 skyPos = planet.getSkyPosition(localPos);
 
         float3 sunDir = normalize(ap.celestial.sunPosition);
-        float3 sunLight = planet.sampleTransmit(skyPos, sunDir);
-        sunLight *= SunColor * max(dot(tex_normal, sunDir), 0.0);
+        float3 sunLight = SunColor * planet.sampleTransmit(skyPos, sunDir);
+        sunLight = getColorSpace().fromLinear(sunLight);
+        sunLight *= max(dot(tex_normal, sunDir), 0.0);
 
         float3 moonDir = normalize(ap.celestial.moonPosition);
-        float3 moonLight = planet.sampleTransmit(skyPos, moonDir);
-        moonLight *= MoonColor * max(dot(tex_normal, moonDir), 0.0);
+        float3 moonLight = MoonColor * planet.sampleTransmit(skyPos, moonDir);
+        moonLight = getColorSpace().fromLinear(moonLight);
+        moonLight *= max(dot(tex_normal, moonDir), 0.0);
 
         diffuse.rgb = (sunLight + moonLight) / PI;
-
         diffuse.rgb *= SampleShadowDisc(globalPos, localPos, geo_normal);
 
-        // diffuse.rgb = 0.0h;
 
         // sample index 2: index 0 is used by SampleShadowDisc, 1 by the SSS dither below.
         float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, 2, ap.timing.frameCounter);
@@ -86,22 +81,16 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         bool is_sss = sss > sssDither;
 
         float3 rayBias = 0.002 * geo_normal;
-        // float3 rayOrigin = localPos + 0.002 * geo_normal;
-        // var flags = HWRT.RTFlags.USE_TWO_STATE_OMM;
 
         if (is_sss) {
             rayDir = -rayDir;
             rayBias = -rayBias;
-            // rayOrigin = localPos - 0.002 * geo_normal;
-            // rayDir = transform_to_world(-geo_normal, rayDirSrc);
-            // flags = flags | HWRT.RTFlags.CULL_BACK_FACES;
         }
 
         // float fWidth = asfloat(texDeferData[globalPos].g);
         // var cone = RayCone.CreateFromGBuffer(fWidth);
 
         var query = HWRT.startQuery(
-            // rayOrigin,
             localPos + rayBias,
             rayDir,
             0.0,
@@ -152,7 +141,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float3 hit_skyPos = planet.getSkyPosition(hit_localPos);
 
             float3 sunLight = SunColor * planet.sampleTransmit(hit_skyPos, sunDir);
+            sunLight = getColorSpace().fromLinear(sunLight);
+
             float3 moonLight = MoonColor * planet.sampleTransmit(hit_skyPos, moonDir);
+            moonLight = getColorSpace().fromLinear(moonLight);
 
             if (!is_sss) {
                 sunLight *= max(dot(hit_localNormal, sunDir), 0.0);
@@ -173,8 +165,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             indirect = hit_diffuse * getColorSpace().fromGamma(hit_albedo);
         }
-
-        // if (is_sss) indirect *= PI;
 
         diffuse.rgb += indirect * transmitColor;
 

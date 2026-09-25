@@ -14,6 +14,7 @@ import pipeline.HillaireSky;
 import pipeline.ReBLUR;
 import pipeline.Resources;
 import pipeline.Sharc;
+import pipeline.Water;
 import lib.Flipper;
 
 
@@ -22,6 +23,7 @@ public class main implements ShaderPack {
     private Exposure exposure;
     private Froxels froxels;
     private Bloom bloom;
+    private Water water;
     private Sharc sharc;
     private ReBLUR reblur;
     private Resources resources;
@@ -42,7 +44,11 @@ public class main implements ShaderPack {
 
         sky = new HillaireSky(pipeline);
         exposure = new Exposure(screen, pipeline);
-        froxels = new Froxels(screen, pipeline);
+        water = new Water(pipeline);
+
+        if (settings.getBoolValue("Froxels_Enabled")) {
+            froxels = new Froxels(screen, pipeline);
+        }
 
         if (settings.getBoolValue("Reblur_Enabled")) {
             reblur = new ReBLUR(screen, pipeline);
@@ -121,16 +127,20 @@ public class main implements ShaderPack {
             
             mainFlipper.flip();
 
-            if (settings.getBoolValue("VolumetricEnabled")) {
-                froxels.render(stage);
+            if (settings.getBoolValue("Volumetric_Enabled")) {
+                if (froxels != null) froxels.render(stage);
 
-                stage.compute("Volumetric", "program/deferred/volumetric", "main")
+                var volumetricShader = stage.compute("Volumetric", "program/deferred/volumetric", "main")
                     .overrideObject("texMain_read", mainFlipper.getReader().name())
                     .overrideObject("texMain_write", mainFlipper.getWriter().name())
-                    .exportInt("Froxel_Width", froxels.BufferWidth)
-                    .exportInt("Froxel_Height", froxels.BufferHeight)
-                    .exportInt("Froxel_Depth", froxels.BufferDepth)
                     .dispatch2D(sizeX_16, sizeY_16);
+                
+                if (froxels != null) {
+                    volumetricShader
+                        .exportInt("Froxel_Width", froxels.BufferWidth)
+                        .exportInt("Froxel_Height", froxels.BufferHeight)
+                        .exportInt("Froxel_Depth", froxels.BufferDepth);
+                }
 
                 mainFlipper.flip();
             }
@@ -197,7 +207,7 @@ public class main implements ShaderPack {
 
         resources.update(state);
         if (reblur != null) reblur.update();
-        froxels.update();
+        if (froxels != null) froxels.update();
         sky.update();
     }
 

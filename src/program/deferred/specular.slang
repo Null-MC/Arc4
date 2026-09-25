@@ -95,6 +95,11 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float ior_near = 1.0;
             float eta = ior_near / ior_current;
 
+            if (ap.camera.fluid == 1) {
+                // ior_near = 1.333;
+                eta = 1.333;
+            }
+
             rayViewDir = refract(viewDir, viewNormal, eta);
 
             if (all(rayViewDir == 0.0)) is_reflect = true;
@@ -351,13 +356,20 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             // TODO: THis should not exist!
             float smoothness = specularMap.r;
             specular.rgb *= sqrt(smoothness);
+
+            // water
+            if (traceDist > 0.0 && ap.camera.fluid == 1) {
+                float3 waterAbsorbption = exp(-traceDist * WaterAbsorb);
+                specular.rgb *= getColorSpace().fromLinear(waterAbsorbption);
+            }
         }
         else {
             uint blockId = deferData.r;
             if (blockId == 1) {
                 // water
                 if (traceDist > 0.0 && ap.camera.fluid == 0) {
-                    specular.rgb *= exp(-traceDist * WaterAbsorb);
+                    float3 waterAbsorbption = exp(-traceDist * WaterAbsorb);
+                    specular.rgb *= getColorSpace().fromLinear(waterAbsorbption);
                 }
             }
             else {
