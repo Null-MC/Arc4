@@ -12,7 +12,6 @@ import lib.sky.transmit;
 import lib.sky.view;
 import lib.ray_cone;
 import lib.pbr.material;
-import lib.reblur;
 
 
 [[vk::image_format("rgba16f")]]
@@ -168,7 +167,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         diffuse.rgb += indirect * transmitColor;
 
-        diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
+        // diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
     }
 
     texDiffuse_write[globalPos] = diffuse;

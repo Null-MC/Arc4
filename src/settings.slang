@@ -43,15 +43,14 @@ internal extern static const bool value_Bloom_Enabled;
 internal extern static const bool value_Debug_Exposure;
 internal extern static const bool value_Debug_SkyLuts;
 internal extern static const bool value_Froxels_Enabled;
+internal extern static const bool value_Lighting_Accumulate;
 internal extern static const int value_Material_Format;
-internal extern static const bool value_Reblur_Enabled;
 internal extern static const bool value_Sharc_Enabled;
 internal extern static const bool value_SpecularEnabled;
 internal extern static const bool value_TAA_Enabled;
 internal extern static const bool value_Volumetric_Enabled;
 
 struct Settings {
-    bool Accumulation;
     float Bloom_Strength;
     ColorSpaces ColorSpace;
     bool Debug_SHARC;
@@ -74,8 +73,8 @@ struct Settings {
     static const bool Debug_Exposure = value_Debug_Exposure;
     static const bool Debug_SkyLuts = value_Debug_SkyLuts;
     static const bool Froxels_Enabled = value_Froxels_Enabled;
+    static const bool Lighting_Accumulate = value_Lighting_Accumulate;
     static const MaterialFormats Material_Format = MaterialFormats(value_Material_Format);
-    static const bool Reblur_Enabled = value_Reblur_Enabled;
     static const bool Sharc_Enabled = value_Sharc_Enabled;
     static const bool SpecularEnabled = value_SpecularEnabled;
     static const bool TAA_Enabled = value_TAA_Enabled;

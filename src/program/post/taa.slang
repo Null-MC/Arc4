@@ -97,10 +97,6 @@ void main(ComputeInput input) {
         float4 lastColor = texTaaHistory_read.Sample(apt_linearSampler, uv_prev);
 
         float mixRate = TAA_MaxAccumFrames;//clamp(lastColor.a, 0.0, TAA_MaxAccumFrames);
-        if (userSettings.Accumulation) {
-            mixRate = clamp(lastColor.a, 0.0, TAA_MaxStillAccumFrames);
-            if (!all(ap.camera.position == ap.temporal.position) || !all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) mixRate = 0;//min(mixRate, 8.0);
-        }
         if (!all(saturate(uv_prev) == uv_prev)) mixRate = 0.0;
 
         int2 luv = input.localPos + 1;
@@ -120,8 +116,7 @@ void main(ComputeInput input) {
 
         if (ap.timing.frameCounter == 0) colorFinal = in0;
         
-        if (!userSettings.Accumulation)
-            colorFinal = clamp(colorFinal, color_min, color_max);
+        colorFinal = clamp(colorFinal, color_min, color_max);
 
         texTaaHistory_write[input.globalPos.xy] = float4(colorFinal, mixRate);
 

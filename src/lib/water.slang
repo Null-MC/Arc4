@@ -1,7 +1,7 @@
 public module water;
 
 import aperture;
-import settings;
+// import settings;
 import lib.common;
 
 
@@ -12,7 +12,7 @@ SamplerState samplerWater;
 
 
 float getWaterTime() {
-    if (userSettings.Accumulation) return 0.0;
+    // if (userSettings.Accumulation) return 0.0;
 
     return ap.timing.timeElapsed;
 }

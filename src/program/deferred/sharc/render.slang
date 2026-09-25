@@ -11,7 +11,6 @@ import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.view;
-import lib.reblur;
 
 
 [[vk::image_format("rgba16f")]]
@@ -160,7 +159,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         diffuse.rgb /= SampleCount;
 
-        diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
+        // diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
     }
 
     diffuse.rgb = clamp(diffuse.rgb, 0.0, half.maxValue);

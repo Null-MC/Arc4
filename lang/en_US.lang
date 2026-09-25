@@ -4,9 +4,6 @@ option.SunAngle=Sun Angle
 suffix.SunAngle=°
 option.SeaLevel=Sea Level
 suffix.SeaLevel=m
-option.TAA_Enabled=TAA
-option.Accumulation=Accumulation
-option.ColorSpace=Color Space
 
 screen.Sky=Sky
 option.Sky_SunRadius=Sun Radius
@@ -22,31 +19,37 @@ screen.Material=Material
 option.Material_Format=Format
 
 screen.Lighting=Lighting
+option.ColorSpace=Color Space
+option.ColorSpace.comment=The color space that will be used for rendering.
 option.SpecularEnabled=Specular Lighting
+option.Lighting_Accumulate=Accumulation
 
     screen.Sharc=SHaRC
     option.Sharc_Enabled=Enabled
+    option.Sharc_Enabled.comment=Enables a Spatially Hashed Radiance Cache for bounced lighting.
     option.Sharc_BucketSize=Bucket Size
+    option.Sharc_BucketSize.comment=The size (in blocks) of each radiance bucket. Smaller buckets will provide more detailed lighting, but use more memory.
     suffix.Sharc_BucketSize=m
     option.Debug_SHARC=Debug
-
-    screen.Reblur=ReBLUR
-    option.Reblur_Enabled=Enabled
+    option.Debug_SHARC.comment=Enables a debugging view that shows the stored radiance of each bucket.
 
     screen.Volumetric=Volumetric
     option.Volumetric_Enabled=Enabled
     option.Froxels_Enabled=Froxels
 
-screen.Bloom=Bloom
-option.Bloom_Enabled=Enabled
-option.Bloom_Strength=Strength
-suffix.Bloom_Strength=%
+screen.Post=Post-Processing
+option.TAA_Enabled=TAA
 
-screen.Exposure=Exposure
-option.Exposure_Min=Min
-option.Exposure_Max=Max
-option.Exposure_Offset=Shift
-option.Debug_Exposure=Debug
+    screen.Bloom=Bloom
+    option.Bloom_Enabled=Enabled
+    option.Bloom_Strength=Strength
+    suffix.Bloom_Strength=%
+
+    screen.Exposure=Exposure
+    option.Exposure_Min=Min
+    option.Exposure_Max=Max
+    option.Exposure_Offset=Shift
+    option.Debug_Exposure=Debug
 
 screen.Debug=Debug
 option.Debug_WhiteWorld=White-World

@@ -1,7 +1,6 @@
 import java.util.function.Consumer;
 
 import org.joml.Vector4f;
-import org.joml.Vector4fc;
 
 import dev.irisshaders.aperture.api.*;
 import dev.irisshaders.aperture.api.commands.StageList;
@@ -14,10 +13,10 @@ import pipeline.BlockMap;
 import pipeline.Bloom;
 import pipeline.Exposure;
 import pipeline.HillaireSky;
-import pipeline.ReBLUR;
 import pipeline.Resources;
 import pipeline.Sharc;
 import pipeline.Water;
+import pipeline.Accumulation;
 import lib.Flipper;
 
 
@@ -28,7 +27,7 @@ public class main implements ShaderPack {
     private Bloom bloom;
     // private Water water;
     private Sharc sharc;
-    private ReBLUR reblur;
+    private Accumulation accumulation;
     private Resources resources;
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
@@ -49,12 +48,12 @@ public class main implements ShaderPack {
         exposure = new Exposure(screen, pipeline);
         new Water(pipeline);
 
-        if (settings.getBoolValue("Froxels_Enabled")) {
-            froxels = new Froxels(screen, pipeline);
+        if (settings.getBoolValue("Lighting_Accumulate")) {
+            accumulation = new Accumulation(pipeline);
         }
 
-        if (settings.getBoolValue("Reblur_Enabled")) {
-            reblur = new ReBLUR(screen, pipeline);
+        if (settings.getBoolValue("Froxels_Enabled")) {
+            froxels = new Froxels(screen, pipeline);
         }
 
         // if (settings.getBoolValue("Sharc_Enabled")) {
@@ -107,10 +106,6 @@ public class main implements ShaderPack {
             }
 
             diffuseFlipper.flip();
-
-            if (reblur != null) {
-                reblur.render(stage, diffuseFlipper.getReader().name());
-            }
             
             if (settings.getBoolValue("SpecularEnabled")) {
                 stage.compute("Deferred-Specular", "program/deferred/specular", "main")
@@ -120,9 +115,21 @@ public class main implements ShaderPack {
 
                 specularFlipper.flip();
             }
+
+            if (settings.getBoolValue("Lighting_Accumulate")) {
+                stage.compute("Deferred-Accumulate", "program/deferred/accumulate", "main")
+                    .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
+                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
+                    .overrideObject("texSpecular_read", specularFlipper.getReader().name())
+                    .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
+                    .dispatch2D(sizeX_16, sizeY_16);
+
+                diffuseFlipper.flip();
+                specularFlipper.flip();
+            }
             
             stage.compute("Deferred-Composite", "program/deferred/composite", "main")
-                .overrideObject("texDiffuse_read", reblur != null ? reblur.resultName() : diffuseFlipper.getReader().name())
+                .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
                 .overrideObject("texSpecular_read", specularFlipper.getReader().name())
                 .overrideObject("texMain_write", mainFlipper.getWriter().name())
                 .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
@@ -217,10 +224,10 @@ public class main implements ShaderPack {
 
         rendererConfig.setSunPathRotation(settings.getFloatValue("SunAngle"));
 
-        resources.update(state);
-        if (reblur != null) reblur.update();
-        if (froxels != null) froxels.update();
         sky.update();
+        resources.update(state);
+        if (froxels != null) froxels.update();
+        if (accumulation != null) accumulation.update();
     }
 
     @Override
