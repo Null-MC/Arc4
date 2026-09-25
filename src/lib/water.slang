@@ -2,23 +2,13 @@ public module water;
 
 import aperture;
 import settings;
+import lib.common;
 
 
-Texture2D<half> texWaterNoiseA;
+// Texture2D<half> texWaterNoiseA;
 Texture2D<half> texWaterNoiseB;
-Texture2D<half4> texWaterDisplacement;
+// Texture2D<half4> texWaterDisplacement;
 SamplerState samplerWater;
-
-
-/// This is a value going from 0 to 1 that defines the amount of vertex offset happening on the object for both noise textures. It’s basically a global controller for the vertex offset. Also useful to adjust the vertex offset when scaling up the water mesh, as that will exaggerate the vertex displacement.
-static const float offsetAmount = 0.011;
-    
-// speed_X, speed_Y, contrast, contribution
-static const float4 noiseAProperties = float4(0.0, 0.15, 0.63, -1.51);
-static const float4 noiseBProperties = float4(0.0, -0.06, 0.65, 0.54);
-
-/// speed_X, speed_Y, contribution
-static const float4 displacementProperties = float4(0.0, 0.0, 0.04, 0.04);
 
 
 float getWaterTime() {
@@ -27,31 +17,63 @@ float getWaterTime() {
     return ap.timing.timeElapsed;
 }
 
-float sampleNoiseTexture(float2 pos, Texture2D<half> tex, float4 props, float2 displ) {
-    float2 uv = pos + displ + getWaterTime() * props.xy;
-    float value = tex.Sample(samplerWater, uv).r;
-    
-    // Replicate Harry's contrast curve and contribution scalar
-    value = (saturate(lerp(0.5, value, props.z)) * 2.0 - 1.0) * props.w;
-    return value;
+float2 waveDx(const in float2 position, const in float2 direction, const in float frequency, const in float timeshift) {
+    float x = dot(direction, position) * frequency + timeshift;
+    float xMod = fmod(x, PI * 2.0);
+
+    float wave = exp(sin(xMod) - 1.0);
+    float dx = wave * cos(xMod);
+    return float2(wave, -dx);
 }
 
-float noiseOffset(float2 pos) {
-    float2 displUV = pos + getWaterTime() * displacementProperties.xy;
-    float2 displ = texWaterDisplacement.Sample(samplerWater, displUV).xy;
-    displ = ((displ * 2.0) - 1.0) * displacementProperties.z;
+float3 GetWaveHeight(const in float3 position, const in float skyLight, const in uint iterations) {
+    float iter = 0.0;           // this will help generating well distributed wave directions
+    float weight = 1.0;         // weight in final sum for the wave, this will change every iteration
+    float frequency = 0.85;      // frequency of the wave, this will change every iteration
+    float timeMultiplier = 2.5; // time multiplier for the wave, this will change every iteration
 
-    float noiseA = sampleNoiseTexture(pos, texWaterNoiseA, noiseAProperties, displ);
-    float noiseB = sampleNoiseTexture(pos, texWaterNoiseB, noiseBProperties, displ);
+    float DRAG_MULT = 0.04;
+    float wavePhaseShift = length(position) * 0.1;
     
-    return noiseA * noiseB;
+    float3 wavePos = position;
+    float weightSum = 0.0;
+    float valueSum = 0.0;
+
+    float time = getWaterTime();
+
+    for (uint i = 0; i < iterations; i++) {
+        float iterMod = fmod(iter, PI * 2.0);
+        float2 p = float2(sin(iterMod), cos(iterMod));
+
+        float2 octave = waveDx(wavePos.xz, p, frequency, time * timeMultiplier + wavePhaseShift);
+        wavePos.xz += p * octave.y * weight * DRAG_MULT;
+
+        valueSum += octave.x * weight;
+        weightSum += weight;
+
+        iter += 1232.399963;
+        timeMultiplier *= 1.07;
+        frequency *= 1.18;
+        weight *= 0.82;
+    }
+
+    float heightDelta = (valueSum / max(weightSum, 0.000001));
+    wavePos.y += heightDelta;
+
+    float3 delta = wavePos;
+    delta -= position;
+
+    return delta;
 }
 
 float3 getWaterNormal(const in float3 localPos, const in float3 geo_normal) {
     float3 worldPos = localPos + ap.camera.position;
 
+    float strength = texWaterNoiseB.Sample(samplerWater, worldPos.xz * 0.014).r;
+    strength = strength * 0.4;
+
     // 1. Calculate the procedural height at the exact current pixel position
-    float height = noiseOffset(worldPos.xz) * offsetAmount;
+    float height = strength * GetWaveHeight(worldPos, 1.0, 28).y;
 
     // 2. Fetch screen-space derivatives of our world position and height
     float3 dX_pos = ddx(worldPos);

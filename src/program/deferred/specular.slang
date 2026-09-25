@@ -281,12 +281,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 hit_skyPos = planet.getSkyPosition(hit_localPos);
 
-            float3 sunLight = planet.sampleTransmit(hit_skyPos, sunDir);
-            sunLight *= SunColor * max(dot(hit_localNormal, sunDir), 0.0);
+            float3 sunLight = SunColor * planet.sampleTransmit(hit_skyPos, sunDir);
+            sunLight = getColorSpace().fromLinear(sunLight) * max(dot(hit_localNormal, sunDir), 0.0);
 
             float3 moonDir = normalize(ap.celestial.moonPosition);
-            float3 moonLight = planet.sampleTransmit(hit_skyPos, moonDir);
-            moonLight *= MoonColor * max(dot(hit_localNormal, moonDir), 0.0);
+            float3 moonLight = MoonColor * planet.sampleTransmit(hit_skyPos, moonDir);
+            moonLight = getColorSpace().fromLinear(moonLight) * max(dot(hit_localNormal, moonDir), 0.0);
 
             float3 hit_diffuse = (sunLight + moonLight) / PI;
             hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
@@ -393,14 +393,11 @@ float F_schlick(const in float cos_theta, const in float f0, const in float f90)
 
 float3 sampleDirectSun(
     const in float3 localPos,
-    // const in float3 geo_normal,
     const in float3 tex_normal,
     const in float3 viewDir,
     const in float3 sunDir,
     const in float alpha,
-    // const in float f0,
-    const in float3 F_VoH,
-    // const in float metalness
+    const in float3 F_VoH
 ) {
     float NoV = max(dot(tex_normal, viewDir), 0.0);
     float NoL = max(dot(tex_normal, sunDir), 0.0);
@@ -408,26 +405,20 @@ float3 sampleDirectSun(
 
     float3 halfDir = normalize(viewDir + sunDir);
     float NoH = max(dot(tex_normal, halfDir), 0.0);
-    // float VoH = max(dot(viewDir, halfDir), 0.0);
 
     float alphaSquared = alpha * alpha;
     float denominator = NoH * NoH * (alphaSquared - 1.0) + 1.0;
     float D = alphaSquared / max(PI * denominator * denominator, 1e-5);
     float G = ggxG1(NoV, alpha) * ggxG1(NoL, alpha);
 
-    // float3 f0Color = lerp(f0, albedo, metalness);
-    // float3 F = f0Color + (1.0 - f0Color) * pow5(1.0 - VoH);
     float3 brdf = F_VoH * D * G / max(4.0 * NoV * NoL, 1e-5);
-
-    // float3 shadow = SampleShadow(localPos, geo_normal);
-    // if (shadow == 0.0) return 0.0;
 
     const float sunHalfAngle = 0.00931;
     const float sunSolidAngle = PI * sunHalfAngle * sunHalfAngle;
     float3 skyPos = planet.getSkyPosition(localPos);
     float3 sunRadiance = SunColor * planet.sampleTransmit(skyPos, sunDir);
 
-    return sunRadiance * brdf * NoL * sunSolidAngle;// * shadow;
+    return getColorSpace().fromLinear(sunRadiance) * brdf * NoL * sunSolidAngle;
 }
 
 float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const in float3 localNormal) {

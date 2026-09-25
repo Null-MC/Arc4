@@ -109,7 +109,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             inScattering = skySample.mieScattering * (miePhaseValue_sun * sunLight + miePhaseValue_moon * moonLight) * shadowF + Sky_MinLight;
 
             float cameraSkyLight = ap.camera.brightness.y;
-            inScattering += getColorSpace().fromLinear(planet.sampleMultiScatter(skyPos, sunDir)) * cameraSkyLight;
+            inScattering += planet.sampleMultiScatter(skyPos, sunDir) * cameraSkyLight;
         }
 
         // Integrated scattering within path segment.
@@ -136,9 +136,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 sampleTransmittance = exp(-stepSizeFar_KM * skySample.extinction);
 
-            float3 sunTransmittanceLux = getColorSpace().fromLinear(planet.sampleTransmit(skyPos_trace, sunDir) * SunColor);
-            float3 moonTransmittanceLux = getColorSpace().fromLinear(planet.sampleTransmit(skyPos_trace, -sunDir) * MoonColor);
-            float3 psiMS = getColorSpace().fromLinear(planet.sampleMultiScatter(skyPos_trace, sunDir) + Sky_MinLight);
+            float3 sunTransmittanceLux = planet.sampleTransmit(skyPos_trace, sunDir) * SunColor;
+            float3 moonTransmittanceLux = planet.sampleTransmit(skyPos_trace, -sunDir) * MoonColor;
+            float3 psiMS = planet.sampleMultiScatter(skyPos_trace, sunDir) + Sky_MinLight;
 
             //vec3 psiMS_moon = getValFromMultiScattLUT(texSkyMultiScatter, newPos, sunDir);
 
@@ -162,8 +162,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 color = texMain_read[globalPos];
 
-    // scattering = getColorSpace().fromLinear(scattering);
-    // transmittance = getColorSpace().fromLinear(transmittance);
+    scattering = getColorSpace().fromLinear(scattering);
+    transmittance = getColorSpace().fromLinear(transmittance);
     color = color * transmittance + scattering;
     
     color = clamp(color, 0.0, half.maxValue);
