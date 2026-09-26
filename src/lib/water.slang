@@ -29,8 +29,9 @@ float2 waveDx(const in float2 position, const in float2 direction, const in floa
 float3 GetWaveHeight(const in float3 position, const in float skyLight, const in uint iterations) {
     float iter = 0.0;           // this will help generating well distributed wave directions
     float weight = 1.0;         // weight in final sum for the wave, this will change every iteration
-    float frequency = 0.85;      // frequency of the wave, this will change every iteration
+    float frequency = 0.65;      // frequency of the wave, this will change every iteration
     float timeMultiplier = 2.5; // time multiplier for the wave, this will change every iteration
+    float sharpness = 2.0;
 
     float DRAG_MULT = 0.04;
     float wavePhaseShift = length(position) * 0.1;
@@ -48,13 +49,14 @@ float3 GetWaveHeight(const in float3 position, const in float skyLight, const in
         float2 octave = waveDx(wavePos.xz, p, frequency, time * timeMultiplier + wavePhaseShift);
         wavePos.xz += p * octave.y * weight * DRAG_MULT;
 
-        valueSum += octave.x * weight;
+        valueSum += pow(octave.x, sharpness) * weight;
         weightSum += weight;
 
         iter += 1232.399963;
         timeMultiplier *= 1.07;
-        frequency *= 1.18;
-        weight *= 0.82;
+        frequency *= 1.28;
+        weight *= 0.78;
+        sharpness *= 1.02;
     }
 
     float heightDelta = (valueSum / max(weightSum, 0.000001));

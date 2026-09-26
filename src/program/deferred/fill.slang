@@ -34,9 +34,10 @@ Texture2D<float4> texDiffuse_read;
 Texture2D<float4> texSpecular_read;
 
 Texture2D<half4> texDeferNormal;
+Texture2D<half2> texNormalHistory_read;
 
 
-int2 findClosestNeighbor(int2 uv, float searchDepth) {
+int2 findClosestNeighbor(int2 uv, float searchDepth, float3 geo_normal) {
     float searchDepthL = linearizeDepth(searchDepth, ap.camera.near, ap.camera.far);
     float maxDiff = 1.0;
     int2 offset = 0;
@@ -45,6 +46,9 @@ int2 findClosestNeighbor(int2 uv, float searchDepth) {
         int2 sample_offset = sample_offsets[i] * 2;
         uint diffuseCounter = texDiffuseCounter_write[uv + sample_offset];
         if (diffuseCounter <= 1) continue;
+
+        float3 sampleNormal = octohedral::decode(texNormalHistory_read[uv + sample_offset]);
+        if (dot(sampleNormal, geo_normal) < 0.965) continue;
 
         // float sampleDepth = texDepthHistory_read[uv + sample_offset];
         float sampleDepth = ap.depth[uv + sample_offset];
@@ -86,10 +90,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     half4 normalData = texDeferNormal[globalPos];
     float depth = ap.depth[globalPos];
 
+    float3 geo_normal = octohedral::decode(normalData.xy);
+
     int2 uv_diffuse = globalPos;
     int2 uv_specular = globalPos;
     if (diffuseCounter == 0 || specularCounter == 0) {
-        int2 uv_offset = findClosestNeighbor(globalPos, depth);
+        int2 uv_offset = findClosestNeighbor(globalPos, depth, geo_normal);
 
         if (diffuseCounter == 0) {
             uv_diffuse += uv_offset;
@@ -112,8 +118,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         diffuse = 0.0;
 
         if (userSettings.Sharc_Enabled) {
-            float3 geo_normal = octohedral::decode(normalData.xy);
-
             float2 texcoord = (globalPos + 0.5) / ap.game.renderSize;
             float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
             float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);

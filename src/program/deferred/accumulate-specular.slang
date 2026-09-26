@@ -29,13 +29,17 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     if (ap.timing.frameCounter > 0) {
         float depth_now = ap.depth[globalPos];
+        half4 specularMap = texDeferSpecular[globalPos];
+
+        float roughness = getSpecularReader().roughness(specularMap);
+        float smoothness = 1.0 - roughness;
 
         float2 texcoord = (globalPos + 0.5) / ap.game.renderSize;
         float3 clipPos = float3(texcoord * 2.0 - 1.0, depth_now);
         float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
         float3 localPosX = mul3(ap.camera.viewInv, viewPos);
 
-        viewPos += normalize(viewPos) * specular_now.a;
+        viewPos += normalize(viewPos) * specular_now.a * smoothness;
         float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
         float3 localPosLast = localPos;
@@ -70,8 +74,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         // if (!all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) historyCounter = min(historyCounter, 8);
 
         // temporal blending
-        half4 specularMap = texDeferSpecular[globalPos];
-        float roughness = getSpecularReader().roughness(specularMap);
         historyCounter = clamp(historyCounter, 0, int(120.0 * sqrt(roughness)) + 4);
         
         // historyCounter *= max(sqrt(roughness), 0.016);
