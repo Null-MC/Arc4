@@ -10,6 +10,7 @@ public class Accumulation {
     private final PingPongBuffer2D diffuseCounter;
     private final PingPongBuffer2D specularHistory;
     private final PingPongBuffer2D specularCounter;
+    private final PingPongBuffer2D normalHistory;
     private final PingPongBuffer2D depthHistory;
 
 
@@ -30,6 +31,10 @@ public class Accumulation {
             .renderSize()
             .createEmpty();
         
+        normalHistory = new PingPongBufferBuilder2D(pipeline, "texNormalHistory", TextureFormat.RG16_SFLOAT)
+            .renderSize()
+            .createEmpty();
+        
         depthHistory = new PingPongBufferBuilder2D(pipeline, "texDepthHistory", TextureFormat.R32_SFLOAT)
             .renderSize()
             .createEmpty();
@@ -40,6 +45,7 @@ public class Accumulation {
         diffuseCounter.flip();
         specularHistory.flip();
         specularCounter.flip();
+        normalHistory.flip();
         depthHistory.flip();
     }
 }
