@@ -136,6 +136,7 @@ public class main implements ShaderPack {
                     .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                     .overrideObject("texSpecular_read", specularFlipper.getReader().name())
                     .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
+                    .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
                     .dispatch2D(sizeX_16, sizeY_16);
 
                 diffuseFlipper.flip();
