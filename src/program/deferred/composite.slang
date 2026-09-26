@@ -58,7 +58,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         if (userSettings.SpecularEnabled) {
             float4 specularLight = texSpecular_read[globalPos];
-            color.rgb *= 1.0 - specularLight.a;
+            // color.rgb *= 1.0 - specularLight.a;
             color.rgb += specularLight.rgb;// * smoothness;
         }
 

@@ -74,7 +74,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 localViewDir = -normalize(localPos);
         float NoV = max(dot(tex_normal, localViewDir), 0.0);
         float F_s = F_schlick(NoV, f0, 1.0);
-        specular.a = F_s;
+        // specular.a = F_s;
 
         float dither = BlueNoise::sampleAnimated1D(globalPos, 73, ap.timing.frameCounter);
         bool is_reflect = F_s >= dither;
@@ -118,10 +118,12 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 geoViewNormal = mul(float3x3(ap.camera.view), geo_normal);
             if (dot(rayViewDir, geoViewNormal) <= 0.0) {
-                // TODO: terminate instead of geometry?
-                rayViewDir = reflect(viewDir, geoViewNormal);
-                // texSpecular_write[globalPos] = 0.0;
-                // return;
+                // TODO: use geometry reflection?
+                // rayViewDir = reflect(viewDir, geoViewNormal);
+
+                // termination is better for opaque surfaces
+                texSpecular_write[globalPos] = 0.0;
+                return;
             }
         }
 
@@ -311,6 +313,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
 
         specular.rgb *= transmitColor;
+        specular.a = traceDist;
 
         if (is_reflect) {
             int hcm = getSpecularReader().hcm(specularMap);

@@ -117,7 +117,21 @@ public class main implements ShaderPack {
             }
 
             if (settings.getBoolValue("Lighting_Accumulate")) {
-                stage.compute("Deferred-Accumulate", "program/deferred/accumulate", "main")
+                stage.compute("Deferred-Accumulate-Diffuse", "program/deferred/accumulate-diffuse", "main")
+                    .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
+                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
+                    .dispatch2D(sizeX_16, sizeY_16);
+
+                diffuseFlipper.flip();
+
+                stage.compute("Deferred-Accumulate-Specular", "program/deferred/accumulate-specular", "main")
+                    .overrideObject("texSpecular_read", specularFlipper.getReader().name())
+                    .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
+                    .dispatch2D(sizeX_16, sizeY_16);
+                
+                specularFlipper.flip();
+
+                stage.compute("Deferred-Accumulate-Fill", "program/deferred/fill", "main")
                     .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
                     .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
                     .overrideObject("texSpecular_read", specularFlipper.getReader().name())
