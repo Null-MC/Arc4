@@ -148,8 +148,11 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
                 float2 hit_uv = surface.getUV();
                 float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
-                half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
-                hitDiffuse += mat_emission(hit_specular);
+                half4 hit_specularMap = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
+
+                float hit_emission = mat_emission(hit_specularMap);
+                hit_emission *= rcp(1.0 + pow2(hitDistance));
+                hitDiffuse += hit_emission;
                 
                 sampleDiffuse = hitDiffuse * getColorSpace().fromGamma(hit_albedo);
             }

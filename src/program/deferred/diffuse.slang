@@ -132,37 +132,16 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             // hit
             var hit = query.getHit();
             var surface = HWRT.decodeHit(hit);
+
+            float2 hit_uv = surface.getUV();
             float3 hit_localPos = surface.getPos();
             float3 hit_localNormal = surface.getNormal();
 
-            hitDistance = distance(localPos, hit_localPos);
-
-            float3 hit_skyPos = planet.getSkyPosition(hit_localPos);
-
-            float3 sunLight = SunColor * planet.sampleTransmit(hit_skyPos, sunDir);
-            sunLight = getColorSpace().fromLinear(sunLight);
-
-            float3 moonLight = MoonColor * planet.sampleTransmit(hit_skyPos, moonDir);
-            moonLight = getColorSpace().fromLinear(moonLight);
-
-            if (!is_sss) {
-                sunLight *= max(dot(hit_localNormal, sunDir), 0.0);
-                moonLight *= max(dot(hit_localNormal, moonDir), 0.0);
-            }
-
-            float3 hit_diffuse = (sunLight + moonLight) / PI;
-            hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
-
-            float2 hit_uv = surface.getUV();
-            // let size = surface.albedo().getSize();
-            // let cone2 = cone.Propagate(distance(localPos, hit_localPos));
-            // var mip = cone2.CalculateMipLevel(size.z);
-
             float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
             half4 hit_specularMap = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
-            hit_diffuse += mat_emission(hit_specularMap);
 
-            indirect = hit_diffuse * getColorSpace().fromGamma(hit_albedo);
+            hitDistance = distance(localPos, hit_localPos);
+            indirect = sampleBounce(hit_localPos, hit_localNormal, hit_albedo, hit_specularMap, sunDir, moonDir, hitDistance);
         }
 
         diffuse.rgb += indirect * transmitColor;
@@ -170,5 +149,37 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         // diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
     }
 
+    diffuse.rgb = clamp(diffuse.rgb, 0.0, half.maxValue);
+
     texDiffuse_write[globalPos] = diffuse;
+}
+
+float3 sampleBounce(float3 localPos, float3 localNormal, float3 albedo, half4 specularMap, float3 sunDir, float3 moonDir, float hitDistance) {
+    // hitDistance = distance(localPos, hit_localPos);
+
+    float3 skyPos = planet.getSkyPosition(localPos);
+
+    float3 sunLight = SunColor * planet.sampleTransmit(skyPos, sunDir);
+    sunLight = getColorSpace().fromLinear(sunLight);
+
+    float3 moonLight = MoonColor * planet.sampleTransmit(skyPos, moonDir);
+    moonLight = getColorSpace().fromLinear(moonLight);
+
+    // if (!is_sss) {
+        sunLight *= max(dot(localNormal, sunDir), 0.0);
+        moonLight *= max(dot(localNormal, moonDir), 0.0);
+    // }
+
+    float3 hit_diffuse = (sunLight + moonLight) / PI;
+    hit_diffuse *= SampleShadow(localPos, localNormal);
+
+    // let size = surface.albedo().getSize();
+    // let cone2 = cone.Propagate(distance(localPos, hit_localPos));
+    // var mip = cone2.CalculateMipLevel(size.z);
+
+    float emission = mat_emission(specularMap);
+    emission *= rcp(1.0 + pow2(hitDistance));
+    hit_diffuse += emission;
+
+    return hit_diffuse * getColorSpace().fromGamma(albedo);
 }

@@ -29,7 +29,7 @@ float2 waveDx(const in float2 position, const in float2 direction, const in floa
 float3 GetWaveHeight(const in float3 position, const in float skyLight, const in uint iterations) {
     float iter = 0.0;           // this will help generating well distributed wave directions
     float weight = 1.0;         // weight in final sum for the wave, this will change every iteration
-    float frequency = 0.65;      // frequency of the wave, this will change every iteration
+    float frequency = 0.25;      // frequency of the wave, this will change every iteration
     float timeMultiplier = 2.5; // time multiplier for the wave, this will change every iteration
     float sharpness = 2.0;
 

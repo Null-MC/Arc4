@@ -21,8 +21,8 @@ RWTexture2D<float3> texSpecular_write;
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float3> texSpecularHistory_write;
 
-[[vk::image_format("r8ui")]]
-RWTexture2D<uint> texSpecularCounter_write;
+[[vk::image_format("rg8ui")]]
+RWTexture2D<uint2> texSpecularCounter_write;
 
 [[vk::image_format("rg16f")]]
 RWTexture2D<float2> texNormalHistory_write;
@@ -86,27 +86,29 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     if (any(globalPos >= ap.game.renderSize)) return;
 
     uint diffuseCounter = texDiffuseCounter_write[globalPos];
-    uint specularCounter = texSpecularCounter_write[globalPos];
+    uint2 specularCounter = texSpecularCounter_write[globalPos];
     half4 normalData = texDeferNormal[globalPos];
     float depth = ap.depth[globalPos];
 
     float3 geo_normal = octohedral::decode(normalData.xy);
+    float3 tex_normal = octohedral::decode(normalData.zw);
 
     int2 uv_diffuse = globalPos;
     int2 uv_specular = globalPos;
-    if (diffuseCounter == 0 || specularCounter == 0) {
-        int2 uv_offset = findClosestNeighbor(globalPos, depth, geo_normal);
+    if (diffuseCounter == 0 || specularCounter.x == 0) {
+        int2 uv_offset = findClosestNeighbor(globalPos, depth, tex_normal);
 
         if (diffuseCounter == 0) {
             uv_diffuse += uv_offset;
             diffuseCounter = texDiffuseCounter_write[uv_diffuse];
         }
 
-        if (specularCounter == 0) {
+        if (specularCounter.x == 0) {
             uv_specular += uv_offset;
             specularCounter = texSpecularCounter_write[uv_specular];
         }
 
+        // TODO: separate diffuse and specular depth?
         depth = ap.depth[globalPos + uv_offset];
     }
 
@@ -129,18 +131,21 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             // Keep a traced-lighting baseline while resolved SHARC history converges.
             float cacheWeight = confidence;// * 0.75;
             diffuse = lerp(diffuse, cachedRadiance, cacheWeight);
-            diffuseCounter = 1;// int(confidence * 7.0) + 1;
+            // diffuseCounter = 1;// int(confidence * 7.0) + 1;
         }
     }
 
+    diffuseCounter++;
+    specularCounter.x++;
+
     texDiffuse_write[globalPos] = diffuse;
     texDiffuseHistory_write[globalPos] = diffuse;
-    texDiffuseCounter_write[globalPos] = ++diffuseCounter;
+    texDiffuseCounter_write[globalPos] = diffuseCounter;
 
     texSpecular_write[globalPos] = specular;
     texSpecularHistory_write[globalPos] = specular;
-    texSpecularCounter_write[globalPos] = ++specularCounter;
+    texSpecularCounter_write[globalPos] = specularCounter;
 
-    texNormalHistory_write[globalPos] = normalData.xy;
+    texNormalHistory_write[globalPos] = normalData.zw;
     texDepthHistory_write[globalPos] = depth;
 }

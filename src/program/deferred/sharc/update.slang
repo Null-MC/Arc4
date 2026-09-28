@@ -125,19 +125,27 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         var hit = query.getHit();
         var surface = HWRT.decodeHit(hit);
+
         float2 hit_uv = surface.getUV();
         float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
         half4 hit_specular = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
 
+        float3 hit_localPos = surface.getPos();
+        float3 hit_localNormal = surface.getNormal();
+        float hitDistance = distance(localPos, hit_localPos);
+
         let hit_sss = getSpecularReader().sss(hit_specular);
         bool hit_is_sss = hit_sss > sssDither;
+        
+        float hit_emission = mat_emission(hit_specular);
+        hit_emission *= rcp(1.0 + pow2(hitDistance));
 
-        pathPositions[pathLength] = surface.getPos();
-        pathNormals[pathLength] = surface.getNormal();
-        pathShadingNormals[pathLength] = surface.getNormal();
+        pathPositions[pathLength] = hit_localPos;
+        pathNormals[pathLength] = hit_localNormal;
+        pathShadingNormals[pathLength] = hit_localNormal;
 
         pathAlbedos[pathLength] = transmitColor * getColorSpace().fromGamma(hit_albedo);
-        pathEmissions[pathLength] = mat_emission(hit_specular);
+        pathEmissions[pathLength] = hit_emission;
         pathSss[pathLength] = hit_is_sss;
 
         pathLength++;

@@ -27,7 +27,7 @@ public class Accumulation {
             .renderSize()
             .createEmpty();
 
-        specularCounter = new PingPongBufferBuilder2D(pipeline, "texSpecularCounter", TextureFormat.R8_UINT)
+        specularCounter = new PingPongBufferBuilder2D(pipeline, "texSpecularCounter", TextureFormat.RG8_UINT)
             .renderSize()
             .createEmpty();
         

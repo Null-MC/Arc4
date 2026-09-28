@@ -31,6 +31,7 @@ public class settings implements PackSettings {
             screen_lighting.option("ColorSpace", OptionType.enumType("ColorSpaces", 1, "sRGB", "ACEScg"), true);
             screen_lighting.option("SpecularEnabled", OptionType.boolType(true), false);
             screen_lighting.option("Lighting_Accumulate", OptionType.boolType(true), false);
+            screen_lighting.option("Lighting_BlurLevel", OptionType.intType(0, 5, 1, 3), false);
 
             subscreen(screen_lighting, "Sharc", screen_sharc -> {
                 screen_sharc.option("Sharc_Enabled", OptionType.boolType(true), false);

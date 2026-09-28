@@ -23,6 +23,8 @@ static const int MaxRefractInterfaces = 1;
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float4> texSpecular_write;
 
+Texture2D<float4> texSpecular_read;
+
 Texture2D<half4> blockAtlasS;
 
 Texture2D<half4> texDeferColor;
@@ -38,7 +40,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float4 color = texDeferColor[globalPos];
     float depth = ap.depth[globalPos];
-    float4 specular = 0.0;
+    float4 specular = texSpecular_read[globalPos];
 
     float2 texcoord = (globalPos + 0.5) / ap.game.renderSize;
 
@@ -48,11 +50,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
+
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
     if (depth > 0.0) {
-        // specular.a = 1.0;
-
         half4 normalData = texDeferNormal[globalPos];
         float3 geo_normal = octohedral::decode(normalData.xy);
         float3 tex_normal = octohedral::decode(normalData.zw);
@@ -69,58 +70,34 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         float3 localViewDir = -normalize(localPos);
         float NoV = max(dot(tex_normal, localViewDir), 0.0);
-        float F_s = F_schlick(NoV, f0, 1.0);
+        // float F_s = F_schlick(NoV, f0, 1.0);
         // specular.a = F_s;
 
-        float dither = BlueNoise::sampleAnimated1D(globalPos, 73, ap.timing.frameCounter);
-        bool is_reflect = F_s >= dither;
+        // float dither = BlueNoise::sampleAnimated1D(globalPos, 73, ap.timing.frameCounter);
+        // bool is_reflect = true;//F_s >= dither;
 
         float roughness = getSpecularReader().roughness(specularMap);
         float alpha = max(roughness * roughness, 0.002);
         float3 rayViewDir;
 
-        if (!is_reflect) {
-            // refract
+        // Sample a visible GGX microfacet normal and reflect the incoming ray around it.
+        float3 microfacetNormal = sampleGGXVNDF(
+            -viewDir,
+            viewNormal,
+            alpha,
+            BlueNoise::sampleAnimated2D(globalPos, 37, ap.timing.frameCounter)
+        );
 
-            if (color.a > 0.99) {
-                texSpecular_write[globalPos] = 0.0;
-                return;
-            }
-            
-            // float ior_near = ap.camera.fluid == 1 ? 1.333 : 1.0;
-            float ior_near = 1.0;
-            float eta = ior_near / ior_current;
+        rayViewDir = reflect(viewDir, microfacetNormal);
 
-            if (ap.camera.fluid == 1) {
-                // ior_near = 1.333;
-                eta = 1.333;
-            }
+        float3 geoViewNormal = mul(float3x3(ap.camera.view), geo_normal);
+        if (dot(rayViewDir, geoViewNormal) <= 0.0) {
+            // TODO: use geometry reflection?
+            // rayViewDir = reflect(viewDir, geoViewNormal);
 
-            rayViewDir = refract(viewDir, viewNormal, eta);
-
-            if (all(rayViewDir == 0.0)) is_reflect = true;
-        }
-
-        if (is_reflect) {
-            // Sample a visible GGX microfacet normal and reflect the incoming ray around it.
-            float3 microfacetNormal = sampleGGXVNDF(
-                -viewDir,
-                viewNormal,
-                alpha,
-                BlueNoise::sampleAnimated2D(globalPos, 37, ap.timing.frameCounter)
-            );
-
-            rayViewDir = reflect(viewDir, microfacetNormal);
-
-            float3 geoViewNormal = mul(float3x3(ap.camera.view), geo_normal);
-            if (dot(rayViewDir, geoViewNormal) <= 0.0) {
-                // TODO: use geometry reflection?
-                // rayViewDir = reflect(viewDir, geoViewNormal);
-
-                // termination is better for opaque surfaces
-                texSpecular_write[globalPos] = 0.0;
-                return;
-            }
+            // termination is better for opaque surfaces
+            texSpecular_write[globalPos] = specular;
+            return;
         }
 
         uint2 deferData = texDeferData[globalPos];
@@ -138,7 +115,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (MaxRefractInterfaces <= 1) {
             // simple
             query = HWRT.startQuery(
-                localPos + (is_reflect ? 0.002 * localViewDir : -0.008 * geo_normal),
+                localPos + 0.002 * localViewDir,
                 rayDir,
                 0.0,
                 max(ap.world.renderDistance, 1.0),
@@ -258,14 +235,15 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             }
         }
 
+        float3 reflectColor = 0.0;
         float traceDist;
         if (!query.hasHit()) {
             // sky
             float3 skyPos = planet.getSkyPosition(localPos);
             float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
-            specular.rgb = getColorSpace().fromLinear(skyColor);
+            reflectColor = getColorSpace().fromLinear(skyColor);
 
-            // specular.rgb += renderSun(rayDir, sunDir) * SunColor;
+            // reflectColor += renderSun(rayDir, sunDir) * SunColor;
             traceDist = ap.camera.far;
         }
         else {
@@ -312,100 +290,81 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             float hit_metalness = getSpecularReader().metalness(hit_specular);
             hit_diffuse *= 1.0 - hit_metalness * sqrt(hit_smoothness);
 
+            // let size = surface.albedo().getSize();
+            // let cone2 = cone.Propagate(distance(localPos, hit_localPos));
+            // var mip = cone2.CalculateMipLevel(size.z);
+            
+            // float hitDistance = distance(localPos, hit_localPos);
+
+            // hit_diffuse += mat_emission(hit_specular);
             float hit_att = rcp(1.0 + pow2(traceDist));
             hit_att = lerp(1.0, hit_att, roughness);
             hit_diffuse += hit_att * mat_emission(hit_specular);
 
-            // let size = surface.albedo().getSize();
-            // let cone2 = cone.Propagate(distance(localPos, hit_localPos));
-            // var mip = cone2.CalculateMipLevel(size.z);
-
             float3 hit_albedo = surface.albedo().sampleLevel(hit_uv, 0.0).rgb * surface.getColor().rgb;
-            // hit_diffuse += mat_emission(hit_specular);
 
-            specular.rgb = hit_diffuse * getColorSpace().fromGamma(hit_albedo);
+            reflectColor = hit_diffuse * getColorSpace().fromGamma(hit_albedo);
         }
 
-        specular.rgb *= transmitColor;
+        reflectColor *= transmitColor;
         specular.a = traceDist;
 
-        if (is_reflect) {
-            int hcm = getSpecularReader().hcm(specularMap);
-            float metalness = getSpecularReader().metalness(specularMap);
+        int hcm = getSpecularReader().hcm(specularMap);
+        float metalness = getSpecularReader().metalness(specularMap);
 
-            float3 halfDir = normalize(localViewDir + sunDir);
-            float VoH = max(dot(localViewDir, halfDir), 0.0);
+        float3 halfDir = normalize(localViewDir + sunDir);
+        float VoH = max(dot(localViewDir, halfDir), 0.0);
 
-            float3 F_NoV, F_VoH;
-            var L = (hcm >= 0 && hcm < 8)
-                ? lazanyi_hcm[hcm]
-                : LazanyiF(lerp(f0, albedo, metalness));
+        float3 F_NoV, F_VoH;
+        var L = (hcm >= 0 && hcm < 8)
+            ? lazanyi_hcm[hcm]
+            : LazanyiF(lerp(f0, albedo, metalness));
 
-            // is_reflect was already chosen with probability F_s, so dividing by it here
-            // avoids re-applying Fresnel a second time on top of that selection frequency.
-            F_NoV = L.F(NoV) / max(F_s, 1e-3);
-            F_VoH = L.F(VoH) / max(F_s, 1e-3);
+        // is_reflect was already chosen with probability F_s, so dividing by it here
+        // avoids re-applying Fresnel a second time on top of that selection frequency.
+        F_NoV = L.F(NoV);// / max(F_s, 1e-3);
+        F_VoH = L.F(VoH);// / max(F_s, 1e-3);
 
-            // VNDF importance sampling requires this visibility ratio to conserve energy.
-            float visibility = ggxG2OverG1(NoV, NoL, alpha);
-            specular.rgb *= F_NoV * visibility;
+        // VNDF importance sampling requires this visibility ratio to conserve energy.
+        float visibility = ggxG2OverG1(NoV, NoL, alpha);
+        reflectColor *= F_NoV * visibility;
 
-            float3 sunSpecular = sampleDirectSun(
-                localPos,
-                // geo_normal,
-                tex_normal,
-                localViewDir,
-                sunDir,
-                alpha,
-                // f0,
-                F_VoH,
-                // albedo,
-                // metalness
-            );
+        float3 sunSpecular = sampleDirectSun(
+            localPos,
+            // geo_normal,
+            tex_normal,
+            localViewDir,
+            sunDir,
+            alpha,
+            // f0,
+            F_VoH,
+            // albedo,
+            // metalness
+        );
 
-            float3 sunDisk = renderSun(rayDir, sunDir);
-            float3 sunShadow = SampleShadow(localPos, geo_normal);
-            specular.rgb += lerp(sunDisk, sunSpecular, saturate(roughness*10.0)) * SunColor * sunShadow;
+        float3 sunDisk = renderSun(rayDir, sunDir);
+        float3 sunShadow = SampleShadow(localPos, geo_normal);
+        reflectColor += lerp(sunDisk, sunSpecular, saturate(roughness*10.0)) * SunColor * sunShadow;
 
-            // albedo tinting
-            specular.rgb *= lerp(1.0, sqrt(albedo), metalness);
+        // albedo tinting
+        reflectColor *= lerp(1.0, sqrt(albedo), metalness);
 
-            // TODO: THis should not exist!
-            float smoothness = specularMap.r;
-            specular.rgb *= sqrt(smoothness);
+        // TODO: THis should not exist!
+        float smoothness = specularMap.r;
+        reflectColor *= sqrt(smoothness);
 
-            // water
-            if (traceDist > 0.0 && ap.camera.fluid == 1) {
-                float3 waterAbsorbption = exp(-traceDist * WaterAbsorb);
-                specular.rgb *= getColorSpace().fromLinear(waterAbsorbption);
-            }
+        // water
+        if (traceDist > 0.0 && ap.camera.fluid == 1) {
+            float3 waterAbsorbption = exp(-traceDist * WaterAbsorb);
+            reflectColor *= getColorSpace().fromLinear(waterAbsorbption);
         }
-        else {
-            uint blockId = deferData.r;
-            if (blockId == 1) {
-                // water
-                if (traceDist > 0.0 && ap.camera.fluid == 0) {
-                    float3 waterAbsorbption = exp(-traceDist * WaterAbsorb);
-                    specular.rgb *= getColorSpace().fromLinear(waterAbsorbption);
-                }
-            }
-            else {
-                // everything else
-                specular.rgb *= getGlassTint(albedo, color.a);
-            }
 
-            // specular.rgb *= 1.0 - color.a;
-        }
+        specular.rgb += reflectColor;
     }
 
     specular = clamp(specular, 0.0, half.maxValue);
 
     texSpecular_write[globalPos] = specular;
-}
-
-float F_schlick(const in float cos_theta, const in float f0, const in float f90) {
-    float invCosTheta = saturate(1.0 - cos_theta);
-    return f0 + (f90 - f0) * pow5(invCosTheta);
 }
 
 float3 sampleDirectSun(
@@ -488,7 +447,6 @@ float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const i
         float3 hit_localPos = surface.getPos();
         float3 hit_localNormal = surface.getNormal();
 
-        // TODO
         diffuse = 0.0;
         if (userSettings.Sharc_Enabled) {
             float sharcConfidence;

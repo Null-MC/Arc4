@@ -24,7 +24,7 @@ static ISpecularReader getSpecularReader() {
 
 float mat_emission(const in half4 specularMap) {
     float emission = getSpecularReader().emission(specularMap);
-    return emission * 200.0;
+    return emission * BlockEmission;
 }
 
 

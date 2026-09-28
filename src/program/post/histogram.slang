@@ -54,36 +54,90 @@ void build(ComputeInput input) {
 [numthreads(256)]
 void compute(uint index : SV_GroupIndex) {
 	uint countForThisBin = texHistogram[index];
-	exposureBins[index] = countForThisBin * index;
 
+	// Store counts in groupshared memory for our parallel prefix sum
+	exposureBins[index] = countForThisBin * index;
 	GroupMemoryBarrierWithGroupSync();
 
+	// Parallel Prefix Sum (Exclusive Scan) to find cumulative pixel counts
+	// This lets every bin know exactly how many pixels lie below it.
+	for (uint stride = 1; stride < 256; stride *= 2) {
+		uint val = 0;
+		if (index >= stride) {
+			val = exposureBins[index - stride];
+		}
+		GroupMemoryBarrierWithGroupSync();
+
+		exposureBins[index] += val;
+		GroupMemoryBarrierWithGroupSync();
+	}
+
+	// Calculate total pixel count from the final element
+	uint totalPixelCount = exposureBins[255];
+
+	// Exclusive sum value: total pixels strictly in bins *below* this thread's bin
+	uint cumulativeCountBelow = (index == 0) ? 0 : exposureBins[index - 1];
+
+	// Optional: Clear the texture if debug is disabled
 	if (!userSettings.Debug_Exposure) {
 		texHistogram[index] = 0u;
 	}
 
-	// This loop will perform a weighted count of the luminance range
+	// 3. Define Low and High Trim Cutoffs (e.g., discard bottom 10% and top 10%)
+	// You can also expose these to userSettings (e.g., userSettings.Exposure_LowTrim)
+	float lowPercentage = 0.10;
+	float highPercentage = 0.10;
+
+	uint lowPixelThreshold  = uint(float(totalPixelCount) * lowPercentage);
+	uint highPixelThreshold = uint(float(totalPixelCount) * (1.0 - highPercentage));
+
+	// Determine how many pixels in this specific bin fit within our safe threshold bounds
+	uint currentBinStart = cumulativeCountBelow;
+	uint currentBinEnd   = cumulativeCountBelow + countForThisBin;
+
+	// Clamp the bin ranges to our safe region limits
+	uint safeStart = clamp(currentBinStart, lowPixelThreshold, highPixelThreshold);
+	uint safeEnd   = clamp(currentBinEnd,   lowPixelThreshold, highPixelThreshold);
+	uint validPixelsInThisBin = safeEnd - safeStart;
+
+	// 4. Repurpose groupshared memory for Weighted Value Reduction
+	// Index 0 represents the minimum bin value mapping (-1.0 logic in your math)
+	exposureBins[index] = validPixelsInThisBin * index;
+	
+	// We also need to count total valid pixels that survived the filtering pass
+	// We reuse histogramBins from your globals to hold the pixel weights
+	histogramBins[index].store(validPixelsInThisBin);
+
+	GroupMemoryBarrierWithGroupSync();
+
+	// 5. Traditional reduction loop for both weighted indices and pixel counters
 	for (uint cutoff = (256u >> 1u); cutoff > 0u; cutoff >>= 1u) {
-		if (uint(index) < cutoff) {
+		if (index < cutoff) {
 			exposureBins[index] += exposureBins[index + cutoff];
+			histogramBins[index].add(histogramBins[index + cutoff].load());
 		}
 
 		GroupMemoryBarrierWithGroupSync();
 	}
 
+	// 6. Final math execution on Thread 0
 	if (index == 0) {
-		float Exposure_numPixels = ap.game.screenSize.x * ap.game.screenSize.y;
-		float nonBlackPixelCount = Exposure_numPixels - countForThisBin;
-		float weightedLogAverage = (exposureBins[0] / max(nonBlackPixelCount, 1.0)) - 1.0;
+		uint remainingPixels = histogramBins[0].load();
+
+		// Prevent division by zero if a scene is totally uniform or empty
+		float filteredLogAverage = 0.0;
+		if (remainingPixels > 0) {
+			filteredLogAverage = (float(exposureBins[0]) / float(remainingPixels)) - 1.0;
+		}
 
 		float Exposure_logLumRange = userSettings.Exposure_Max - userSettings.Exposure_Min;
-		float Exposure_logLumRangeInv = rcp(Exposure_logLumRange);
 
-		// Map from our histogram space to actual luminance
-		float weightedAvg = (weightedLogAverage/254.0 * Exposure_logLumRange) + userSettings.Exposure_Min;
+		// Map from our histogram space back to actual HDR luminance
+		float weightedAvg = (filteredLogAverage / 254.0 * Exposure_logLumRange) + userSettings.Exposure_Min;
 		float weightedAvgLum = exp2(weightedAvg + userSettings.Exposure_Offset);
 		float adaptedLum = weightedAvgLum;
 
+		// Temporal smoothing mix over sequential frames
 		// do not mix if first rendered frame
 		if (ap.timing.frameCounter > 0) {
 			float timeF = 1.0 - exp(-max(Exposure_Speed * ap.timing.lastFrameTime, 1.0e-12));

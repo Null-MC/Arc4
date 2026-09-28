@@ -5,6 +5,8 @@ import lib.octohedral;
 import lib.pbr.material;
 
 
+static const int MAX_HISTORY = 40;
+
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float3> texDiffuse_write;
 
@@ -33,8 +35,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float depth_now = ap.depth[globalPos];
         half4 normalData_now = texDeferNormal[globalPos];
         float3 geo_normal_now = octohedral::decode(normalData_now.xy);
+        float3 tex_normal_now = octohedral::decode(normalData_now.zw);
 
         float2 texcoord = (globalPos + 0.5) / ap.game.renderSize;
+
+        // if (userSettings.TAA_Enabled) {
+        //     texcoord -= scene.TAA_jitter;
+        // }
+
         float3 clipPos = float3(texcoord * 2.0 - 1.0, depth_now);
         float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
         float3 localPos = mul3(ap.camera.viewInv, viewPos);
@@ -52,31 +60,34 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         // history counter and rejection
         historyCounter = texDiffuseCounter_read.Sample(apt_nearestSampler, texcoordLast).r;
+        float viewDist = length(viewPos);
 
         // reject if the motion between frames is too large
-        if (length(localPosLast - localPos) > 0.02 * length(localPos)) {
-            texcoordLast = (floor(texcoordLast * ap.game.renderSize) + 0.5) / ap.game.renderSize;
+        if (length(localPosLast - localPos) > 0.04 * viewDist) {
+            // texcoordLast = (floor(texcoordLast * ap.game.renderSize) + 0.5) / ap.game.renderSize;
             historyCounter = 0;
         }
 
         // reject if offscreen
         if (!all(saturate(texcoordLast) == texcoordLast)) historyCounter = 0;
 
-        // TODO: reject normal changes
+        // reject normal changes
         half2 normalData_last = texNormalHistory_read.Sample(apt_nearestSampler, texcoordLast);
-        float3 geo_normal_last = octohedral::decode(normalData_last);
-        if (dot(geo_normal_now, geo_normal_last) < 0.965) historyCounter = 0;
+        float3 normal_last = octohedral::decode(normalData_last);
+
+        float normalWeight = 16.0 / (16.0 + viewDist);
+        if (dot(tex_normal_now, normal_last) < normalWeight) historyCounter = 0;
 
         // reject if the camera has moved/rotated at all
         // if (!all(ap.camera.position == ap.temporal.position)) historyCounter = 0;
         // if (!all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) historyCounter = min(historyCounter, 8);
 
         // temporal blending
-        historyCounter = clamp(historyCounter, 0, 120);
+        historyCounter = clamp(historyCounter, 0, MAX_HISTORY);
 
         // TODO: replace with manually weighted linear sampling
         // float3 diffuse_last = texDiffuseHistory_read.Sample(apt_linearSampler, texcoordLast).rgb;
-        float3 diffuse_last = SampleHistoryValid(texcoordLast, geo_normal_now);
+        float3 diffuse_last = SampleHistoryValid(texcoordLast, tex_normal_now);
 
         diffuse_final = lerp(diffuse_last, diffuse_now, rcp(historyCounter + 1.0));
     }
@@ -113,24 +124,10 @@ float3 SampleHistoryValid(float2 texcoordLast, float3 geo_normal) {
     float3 c01 = texDiffuseHistory_read[p01].rgb;
     float3 c11 = texDiffuseHistory_read[p11].rgb;
 
-    // float d00 = texDepthHistory_read[p00].r;
-    // float d10 = texDepthHistory_read[p10].r;
-    // float d01 = texDepthHistory_read[p01].r;
-    // float d11 = texDepthHistory_read[p11].r;
-
-    float3 n00 = octohedral::decode(texNormalHistory_read[p00].xy);
-    float3 n10 = octohedral::decode(texNormalHistory_read[p10].xy);
-    float3 n01 = octohedral::decode(texNormalHistory_read[p01].xy);
-    float3 n11 = octohedral::decode(texNormalHistory_read[p11].xy);
-
-    // Validate each tap against the current depth. 
-    // Using a linearized or depth-ratio threshold prevents background bleeding.
-    // float depthThreshold = 0.01 * (ap.camera.near / max(depth_now, 1e-5)); 
-    
-    // float v00 = (abs(d00 - depth_now) < depthThreshold) ? 1.0 : 0.0;
-    // float v10 = (abs(d10 - depth_now) < depthThreshold) ? 1.0 : 0.0;
-    // float v01 = (abs(d01 - depth_now) < depthThreshold) ? 1.0 : 0.0;
-    // float v11 = (abs(d11 - depth_now) < depthThreshold) ? 1.0 : 0.0;
+    float3 n00 = octohedral::decode(texNormalHistory_read[p00]);
+    float3 n10 = octohedral::decode(texNormalHistory_read[p10]);
+    float3 n01 = octohedral::decode(texNormalHistory_read[p01]);
+    float3 n11 = octohedral::decode(texNormalHistory_read[p11]);
 
     float v00 = (dot(n00, geo_normal) > 0.965) ? 1.0 : 0.0;
     float v10 = (dot(n10, geo_normal) > 0.965) ? 1.0 : 0.0;
