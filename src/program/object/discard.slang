@@ -7,7 +7,7 @@ struct VertexData {};
 struct FragmentData {};
 
 
-struct DiscardShader : Shader<VertexData, FragmentData> {
+struct ObjectShader : Shader<VertexData, FragmentData> {
     static void emitVertex(Vertex input, ObjectTransforms transforms, out VertexData output, out float4 clipPos) {
         clipPos = float4(-10.0);
     }

@@ -18,7 +18,7 @@ struct FragmentData {
 }
 
 
-struct WeatherShader : Shader<VertexData, FragmentData> {
+struct ObjectShader : Shader<VertexData, FragmentData> {
     static void emitVertex(Vertex input, ObjectTransforms transforms, out VertexData output, out float4 clipPos) {
         output.uv = input.uv();
         output.pos = input.pos().xyz;
@@ -50,7 +50,7 @@ struct WeatherShader : Shader<VertexData, FragmentData> {
         moonLight = getColorSpace().fromLinear(moonLight);
 
         color.rgb = (sunLight + moonLight) / PI;
-        color.rgb *= SampleShadowDisc(objectData.screenPos.xy, input.pos, 0.0);
+        color.rgb *= SampleShadowDisc(int2(objectData.screenPos.xy), input.pos, 0.0);
         color.rgb *= albedo;
 
         FragmentData output;

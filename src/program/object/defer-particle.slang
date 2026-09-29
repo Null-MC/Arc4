@@ -22,7 +22,7 @@ struct FragmentData {
 }
 
 
-struct DeferShader : Shader<VertexData, FragmentData> {
+struct ObjectShader : Shader<VertexData, FragmentData> {
     static void emitVertex(Vertex input, ObjectTransforms transforms, out VertexData output, out float4 clipPos) {
         output.uv = input.uv();
         output.pos = input.pos().xyz;

@@ -17,8 +17,6 @@ import pipeline.Sharc;
 import pipeline.Water;
 import pipeline.Accumulation;
 import lib.Flipper;
-import lib.LightData;
-import lib.LightDataManager;
 import lib.Shader.ShaderBuilder;
 
 
@@ -34,7 +32,6 @@ public class main implements ShaderPack {
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
     private Flipper<Texture2D> specularFlipper;
-    private LightDataManager lightData;
 
     private ShaderBuilder builder;
 
@@ -43,10 +40,8 @@ public class main implements ShaderPack {
 	public void configurePipeline(Screen screen, PipelineConfig pipeline) {
         var settings = pipeline.settings();
         resources = new Resources(screen, pipeline);
-        lightData = new LightDataManager(pipeline);
 
-        builder = new ShaderBuilder(screen);
-        mapBlockData();
+        builder = new ShaderBuilder(screen, pipeline);
 
         specularFlipper = new Flipper<Texture2D>(resources.texSpecular_A, resources.texSpecular_B);
         mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
@@ -62,15 +57,24 @@ public class main implements ShaderPack {
 
         if (settings.getBoolValue("Froxels_Enabled")) {
             froxels = new Froxels(screen, pipeline);
+
+            builder
+                .exportInt("Froxel_Width", froxels.BufferWidth)
+                .exportInt("Froxel_Height", froxels.BufferHeight)
+                .exportInt("Froxel_Depth", froxels.BufferDepth);
         }
 
         // if (settings.getBoolValue("Sharc_Enabled")) {
             sharc = new Sharc(screen, pipeline);
+
+            builder.exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount());
         // }
 
         if (settings.getBoolValue("Bloom_Enabled")) {
             bloom = new Bloom(screen, pipeline);
         }
+
+        mapBlockData();
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);
@@ -80,49 +84,46 @@ public class main implements ShaderPack {
             stage.clearTo(new Vector4f(0f), resources.weatherTexture);
         });
         
-        pipeline.object(ProgramUsage.SKYBOX, "program/object/discard", "DiscardShader");
-        pipeline.object(ProgramUsage.SKY_TEXTURES, "program/object/discard", "DiscardShader");
-        pipeline.object(ProgramUsage.CLOUDS, "program/object/discard", "DiscardShader");
+        builder.discard(ProgramUsage.SKYBOX);
+        builder.discard(ProgramUsage.SKY_TEXTURES);
+        builder.discard(ProgramUsage.CLOUDS);
 
-        pipeline.object(ProgramUsage.BASIC, "program/object/defer", "DeferShader")
+        builder.object(ProgramUsage.BASIC, "program/object/defer", shader -> shader
             .writes("color", resources.texDeferColor, BlendMode.NONE)
             .writes("normal", resources.texDeferNormal, BlendMode.NONE)
             .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
-            .writes("data", resources.texDeferData, BlendMode.NONE);
+            .writes("data", resources.texDeferData, BlendMode.NONE));
 
-        pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/defer", "DeferShader")
-            .writes("color", resources.texDeferColor, BlendMode.NONE)
-            .writes("normal", resources.texDeferNormal, BlendMode.NONE)
-            .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
-            .writes("data", resources.texDeferData, BlendMode.NONE)
-            .exportBool("IsTranslucent", true);
-
-        pipeline.object(ProgramUsage.PARTICLES, "program/object/defer-particle", "DeferShader")
-            .writes("color", resources.texDeferColor, BlendMode.NONE)
-            .writes("normal", resources.texDeferNormal, BlendMode.NONE)
-            .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
-            .writes("data", resources.texDeferData, BlendMode.NONE);
-
-        pipeline.object(ProgramUsage.PARTICLES_TRANSLUCENT, "program/object/defer-particle", "DeferShader")
+        builder.object(ProgramUsage.TRANSLUCENT, "program/object/defer", shader -> shader
             .writes("color", resources.texDeferColor, BlendMode.NONE)
             .writes("normal", resources.texDeferNormal, BlendMode.NONE)
             .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
             .writes("data", resources.texDeferData, BlendMode.NONE)
-            .exportBool("IsTranslucent", true);
+            .exportBool("IsTranslucent", true));
 
-        pipeline.object(ProgramUsage.WEATHER, "program/object/weather", "WeatherShader")
-            .writes("color", resources.weatherTexture);
+        builder.object(ProgramUsage.PARTICLES, "program/object/defer-particle", shader -> shader
+            .writes("color", resources.texDeferColor, BlendMode.NONE)
+            .writes("normal", resources.texDeferNormal, BlendMode.NONE)
+            .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
+            .writes("data", resources.texDeferData, BlendMode.NONE));
+
+        builder.object(ProgramUsage.PARTICLES_TRANSLUCENT, "program/object/defer-particle", shader -> shader
+            .writes("color", resources.texDeferColor, BlendMode.NONE)
+            .writes("normal", resources.texDeferNormal, BlendMode.NONE)
+            .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
+            .writes("data", resources.texDeferData, BlendMode.NONE)
+            .exportBool("IsTranslucent", true));
+
+        builder.object(ProgramUsage.WEATHER, "program/object/weather", shader -> shader
+            .writes("color", resources.weatherTexture));
         
         withStage(pipeline, ProgramStage.POST_RENDER, stage -> {
-            var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
-            var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
-            
             if (settings.getBoolValue("Sharc_Enabled")) {
-                sharc.render(stage, diffuseFlipper.getWriter());
+                sharc.render(stage, builder, diffuseFlipper.getWriter());
             }
             else {
                 builder.compute(stage, "Deferred-Diffuse", "program/deferred/diffuse", shader -> {
-                    shader.overrideObject("texDiffuse_write", diffuseFlipper.getWriter());
+                    shader.override("texDiffuse_write", diffuseFlipper.getWriter());
                     shader.dispatchRenderSize(16, 16);
                 });
             }
@@ -131,17 +132,15 @@ public class main implements ShaderPack {
             
             if (settings.getBoolValue("SpecularEnabled")) {
                 builder.compute(stage, "Deferred-Specular-Refract", "program/deferred/refraction", shader -> {
-                    shader.overrideObject("texSpecular_write", specularFlipper.getWriter());
-                    shader.exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount());
+                    shader.override("texSpecular_write", specularFlipper.getWriter());
                     shader.dispatchRenderSize(16, 16);
                 });
 
                 specularFlipper.flip();
 
                 builder.compute(stage, "Deferred-Specular-Reflect", "program/deferred/reflection", shader -> {
-                    shader.overrideObject("texSpecular_read", specularFlipper.getReader());
-                    shader.overrideObject("texSpecular_write", specularFlipper.getWriter());
-                    shader.exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount());
+                    shader.override("texSpecular_read", specularFlipper.getReader());
+                    shader.override("texSpecular_write", specularFlipper.getWriter());
                     shader.dispatchRenderSize(16, 16);
                 });
 
@@ -157,111 +156,107 @@ public class main implements ShaderPack {
 
             if (settings.getBoolValue("Lighting_Accumulate")) {
                 builder.compute(stage, "Deferred-Accumulate-Diffuse", "program/deferred/accumulate-diffuse", shader -> {
-                    shader.overrideObject("texDiffuse_read", diffuseFlipper.getReader());
-                    shader.overrideObject("texDiffuse_write", diffuseFlipper.getWriter());
+                    shader.override("texDiffuse_read", diffuseFlipper.getReader());
+                    shader.override("texDiffuse_write", diffuseFlipper.getWriter());
                     shader.dispatchRenderSize(16, 16);
                 });
 
                 diffuseFlipper.flip();
 
                 builder.compute(stage, "Deferred-Accumulate-Specular", "program/deferred/accumulate-specular", shader -> {
-                    shader.overrideObject("texSpecular_read", specularFlipper.getReader());
-                    shader.overrideObject("texSpecular_write", specularFlipper.getWriter());
+                    shader.override("texSpecular_read", specularFlipper.getReader());
+                    shader.override("texSpecular_write", specularFlipper.getWriter());
                     shader.dispatchRenderSize(16, 16);
                 });
                 
                 specularFlipper.flip();
 
                 builder.compute(stage, "Deferred-Accumulate-Fill", "program/deferred/accumulate-fill", shader -> {
-                    shader.overrideObject("texDiffuse_read", diffuseFlipper.getReader());
-                    shader.overrideObject("texDiffuse_write", diffuseFlipper.getWriter());
-                    shader.overrideObject("texSpecular_read", specularFlipper.getReader());
-                    shader.overrideObject("texSpecular_write", specularFlipper.getWriter());
-                    shader.exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount());
+                    shader.override("texDiffuse_read", diffuseFlipper.getReader());
+                    shader.override("texDiffuse_write", diffuseFlipper.getWriter());
+                    shader.override("texSpecular_read", specularFlipper.getReader());
+                    shader.override("texSpecular_write", specularFlipper.getWriter());
                     shader.dispatchRenderSize(16, 16);
                 });
 
                 diffuseFlipper.flip();
                 specularFlipper.flip();
             }
-                        
+            
             for (int i = 0; i < settings.getIntValue("Lighting_BlurLevel"); i++) {
-                stage.compute("Deferred-Diffuse-Blur"+i, "program/deferred/diffuse-blur", "main")
-                    .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
-                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
-                    .exportInt("ATrousLevel", i)
-                    .dispatch2D(sizeX_16, sizeY_16);
+                int aTrousLevel = i;
+                builder.compute(stage, "Deferred-Diffuse-Blur"+i, "program/deferred/diffuse-blur", shader -> {
+                    shader.override("texDiffuse_read", diffuseFlipper.getReader());
+                    shader.override("texDiffuse_write", diffuseFlipper.getWriter());
+                    shader.dispatchRenderSize(16, 16);
+                    shader.exportInt("ATrousLevel", aTrousLevel);
+                });
 
                 diffuseFlipper.flip();
 
                 if (settings.getBoolValue("SpecularEnabled")) {
-                    stage.compute("Deferred-Specular-Blur"+i, "program/deferred/specular-blur", "main")
-                        .overrideObject("texSpecular_read", specularFlipper.getReader().name())
-                        .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
-                        .exportInt("ATrousLevel", i)
-                        .dispatch2D(sizeX_16, sizeY_16);
+                    builder.compute(stage, "Deferred-Specular-Blur"+i, "program/deferred/specular-blur", shader -> {
+                        shader.override("texSpecular_read", specularFlipper.getReader());
+                        shader.override("texSpecular_write", specularFlipper.getWriter());
+                        shader.dispatchRenderSize(16, 16);
+                        shader.exportInt("ATrousLevel", aTrousLevel);
+                    });
 
                     specularFlipper.flip();
                 }
             }
             
-            stage.compute("Deferred-Diffuse-Hand", "program/deferred/diffuse-hand", "main")
-                .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
-                .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
-                .dispatch2D(sizeX_16, sizeY_16);
+            builder.compute(stage, "Deferred-Diffuse-Hand", "program/deferred/diffuse-hand", shader -> {
+                shader.override("texDiffuse_read", diffuseFlipper.getReader());
+                shader.override("texDiffuse_write", diffuseFlipper.getWriter());
+                shader.dispatchRenderSize(16, 16);
+            });
 
             diffuseFlipper.flip();
 
-            stage.compute("Deferred-Composite", "program/deferred/composite", "main")
-                .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
-                .overrideObject("texSpecular_read", specularFlipper.getReader().name())
-                .overrideObject("texMain_write", mainFlipper.getWriter().name())
-                .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
-                .dispatch2D(sizeX_16, sizeY_16);
+            builder.compute(stage, "Deferred-Composite", "program/deferred/composite", shader -> {
+                shader.override("texDiffuse_read", diffuseFlipper.getReader());
+                shader.override("texSpecular_read", specularFlipper.getReader());
+                shader.override("texMain_write", mainFlipper.getWriter());
+                shader.dispatchRenderSize(16, 16);
+            });
             
             mainFlipper.flip();
 
             if (settings.getBoolValue("Volumetric_Enabled")) {
                 if (froxels != null) froxels.render(stage);
-
-                var volumetricShader = stage.compute("Volumetric", "program/deferred/volumetric", "main")
-                    .overrideObject("texMain_read", mainFlipper.getReader().name())
-                    .overrideObject("texMain_write", mainFlipper.getWriter().name())
-                    .dispatch2D(sizeX_16, sizeY_16);
                 
-                if (froxels != null) {
-                    volumetricShader
-                        .exportInt("Froxel_Width", froxels.BufferWidth)
-                        .exportInt("Froxel_Height", froxels.BufferHeight)
-                        .exportInt("Froxel_Depth", froxels.BufferDepth);
-                }
+                builder.compute(stage, "Volumetric", "program/deferred/volumetric", shader -> {
+                    shader.override("texMain_read", mainFlipper.getReader());
+                    shader.override("texMain_write", mainFlipper.getWriter());
+                    shader.dispatchRenderSize(16, 16);
+                });
 
                 mainFlipper.flip();
             }
 
             stage.generateMips(mainFlipper.getReader());
 
-            stage.compute("Overlay", "program/deferred/overlay", "main")
-                .overrideObject("texMain_read", mainFlipper.getReader().name())
-                .overrideObject("texMain_write", mainFlipper.getWriter().name())
-                .dispatch2D(sizeX_16, sizeY_16);
+            builder.compute(stage, "Overlay", "program/deferred/overlay", shader -> {
+                shader.override("texMain_read", mainFlipper.getReader());
+                shader.override("texMain_write", mainFlipper.getWriter());
+                shader.dispatchRenderSize(16, 16);
+            });
 
             mainFlipper.flip();
 
             if (settings.getBoolValue("TAA_Enabled")) {
-                stage.compute("TAA", "program/post/taa", "main")
-                    .overrideObject("texMain_read", mainFlipper.getReader().name())
-                    .overrideObject("texMain_write", mainFlipper.getWriter().name())
-                    .dispatch2D(sizeX_16, sizeY_16);
+                builder.compute(stage, "TAA", "program/post/taa", shader -> {
+                    shader.override("texMain_read", mainFlipper.getReader());
+                    shader.override("texMain_write", mainFlipper.getWriter());
+                    shader.dispatchRenderSize(16, 16);
+                });
 
                 mainFlipper.flip();
             }
         });
 
         withStage(pipeline, ProgramStage.POST_UPSCALE, stage -> {
-            var sizeX_16 = (int)Math.ceil(screen.renderWidth() / 16f);
-            var sizeY_16 = (int)Math.ceil(screen.renderHeight() / 16f);
-
             if (bloom != null) {
                 bloom.render(stage, mainFlipper.getReader());
                 // do not flip, writes to reader!
@@ -269,19 +264,21 @@ public class main implements ShaderPack {
 
             exposure.render(stage, mainFlipper.getReader());
             
-            stage.compute("Tonemap", "program/post/tonemap", "main")
-                .overrideObject("tex_read", mainFlipper.getReader().name())
-                .overrideObject("tex_write", mainFlipper.getWriter().name())
-                .dispatch2D(sizeX_16, sizeY_16);
+            builder.compute(stage, "Tonemap", "program/post/tonemap", shader -> {
+                shader.override("tex_read", mainFlipper.getReader());
+                shader.override("tex_write", mainFlipper.getWriter());
+                shader.dispatchRenderSize(16, 16);
+            });
 
             mainFlipper.flip();
 
             if (settings.getBoolValue("TAA_Enabled")) {
                 // TAA CAS Sharpening
-                stage.compute("Sharpen", "program/post/sharpen", "main")
-                    .overrideObject("texMain_read", mainFlipper.getReader().name())
-                    .overrideObject("texMain_write", mainFlipper.getWriter().name())
-                    .dispatch2D(sizeX_16, sizeY_16);
+                builder.compute(stage, "Sharpen", "program/post/sharpen", shader -> {
+                    shader.override("texMain_read", mainFlipper.getReader());
+                    shader.override("texMain_write", mainFlipper.getWriter());
+                    shader.dispatchRenderSize(16, 16);
+                });
 
                 mainFlipper.flip();
             }
@@ -290,12 +287,7 @@ public class main implements ShaderPack {
         pipeline.combinationPass("program/post/final")
             .overrideObject("tex_read", mainFlipper.getReader().name());
 
-        for (var blockId : builder.Blocks.keys()) {
-            var blockData = builder.Blocks.get(blockId);
-            lightData.map(blockId, LightData.fromHexColor(blockData.light_color(), blockData.light_range()));
-        }
-
-        lightData.update();
+        builder.updateLights();
     }
 
     @Override
@@ -323,7 +315,7 @@ public class main implements ShaderPack {
 
     @Override
 	public int setBlockId(IBlockState block) {
-		return builder.Blocks.getId(block);
+		return builder.getBlockId(block);
 	}
 
     private void withStage(PipelineConfig pipeline, ProgramStage programStage, Consumer<StageList> callback) {

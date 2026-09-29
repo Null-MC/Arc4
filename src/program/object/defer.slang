@@ -2,6 +2,7 @@ import aperture;
 import settings;
 import object_shader;
 import lib.common;
+import lib.blocks;
 import lib.octohedral;
 import lib.ray_cone;
 import lib.water;
@@ -26,7 +27,7 @@ struct FragmentData {
 }
 
 
-struct DeferShader : Shader<VertexData, FragmentData> {
+struct ObjectShader : Shader<VertexData, FragmentData> {
     static void emitVertex(Vertex input, ObjectTransforms transforms, out VertexData output, out float4 clipPos) {
         output.uv = input.uv();
         output.pos = input.pos().xyz;
@@ -101,7 +102,7 @@ struct DeferShader : Shader<VertexData, FragmentData> {
             specular = half4(texSpecularMap.sampleLevel(input.uv, lod));
         }
 
-        if (input.blockId == 1) {
+        if (input.blockId == BLOCK_WATER) {
             // water
             color = 0.0h;
             // tex_normal = geo_normal;
