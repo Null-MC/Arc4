@@ -2,6 +2,7 @@ import aperture;
 import settings;
 import rt_pipeline;
 import lib.common;
+import lib.blocks;
 import lib.sharc;
 import lib.shadow;
 import lib.hemisphere;
@@ -382,19 +383,19 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
         else {
             uint blockId = deferData.r;
-            if (blockId == 1) {
-                // water
+            if (blockId == BLOCK_WATER) {
                 if (traceDist > 0.0 && ap.camera.fluid == 0) {
                     float3 waterAbsorbption = exp(-traceDist * WaterAbsorb);
                     specular.rgb *= getColorSpace().fromLinear(waterAbsorbption);
                 }
             }
-            else {
-                // everything else
+            else if (blockId == BLOCK_STAINED_GLASS) {
                 specular.rgb *= getGlassTint(albedo, color.a);
             }
-
-            // specular.rgb *= 1.0 - color.a;
+            else {
+                // everything else
+                specular.rgb *= 1.0 - color.a;
+            }
         }
     }
 

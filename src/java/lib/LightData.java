@@ -1,4 +1,4 @@
-package pipeline;
+package lib;
 
 public class LightData {
     private final int data;

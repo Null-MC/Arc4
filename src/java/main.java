@@ -9,17 +9,17 @@ import dev.irisshaders.aperture.api.pipeline.*;
 import dev.irisshaders.aperture.api.renderer.*;
 
 import pipeline.Froxels;
-import pipeline.BlockMap;
 import pipeline.Bloom;
 import pipeline.Exposure;
 import pipeline.HillaireSky;
-import pipeline.LightData;
-import pipeline.LightDataManager;
 import pipeline.Resources;
 import pipeline.Sharc;
 import pipeline.Water;
 import pipeline.Accumulation;
 import lib.Flipper;
+import lib.LightData;
+import lib.LightDataManager;
+import lib.Shader.ShaderBuilder;
 
 
 public class main implements ShaderPack {
@@ -34,8 +34,9 @@ public class main implements ShaderPack {
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
     private Flipper<Texture2D> specularFlipper;
-    private BlockMap blocks = new BlockMap();
     private LightDataManager lightData;
+
+    private ShaderBuilder builder;
 
 
     @Override
@@ -43,6 +44,9 @@ public class main implements ShaderPack {
         var settings = pipeline.settings();
         resources = new Resources(screen, pipeline);
         lightData = new LightDataManager(pipeline);
+
+        builder = new ShaderBuilder(screen);
+        mapBlockData();
 
         specularFlipper = new Flipper<Texture2D>(resources.texSpecular_A, resources.texSpecular_B);
         mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
@@ -117,26 +121,29 @@ public class main implements ShaderPack {
                 sharc.render(stage, diffuseFlipper.getWriter());
             }
             else {
-                stage.compute("Deferred-Diffuse", "program/deferred/diffuse", "main")
-                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
-                    .dispatch2D(sizeX_16, sizeY_16);
+                builder.compute(stage, "Deferred-Diffuse", "program/deferred/diffuse", shader -> {
+                    shader.overrideObject("texDiffuse_write", diffuseFlipper.getWriter());
+                    shader.dispatchRenderSize(16, 16);
+                });
             }
 
             diffuseFlipper.flip();
             
             if (settings.getBoolValue("SpecularEnabled")) {
-                stage.compute("Deferred-Specular-Refract", "program/deferred/refraction", "main")
-                    .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
-                    .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
-                    .dispatch2D(sizeX_16, sizeY_16);
+                builder.compute(stage, "Deferred-Specular-Refract", "program/deferred/refraction", shader -> {
+                    shader.overrideObject("texSpecular_write", specularFlipper.getWriter());
+                    shader.exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount());
+                    shader.dispatchRenderSize(16, 16);
+                });
 
                 specularFlipper.flip();
 
-                stage.compute("Deferred-Specular-Reflect", "program/deferred/reflection", "main")
-                    .overrideObject("texSpecular_read", specularFlipper.getReader().name())
-                    .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
-                    .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
-                    .dispatch2D(sizeX_16, sizeY_16);
+                builder.compute(stage, "Deferred-Specular-Reflect", "program/deferred/reflection", shader -> {
+                    shader.overrideObject("texSpecular_read", specularFlipper.getReader());
+                    shader.overrideObject("texSpecular_write", specularFlipper.getWriter());
+                    shader.exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount());
+                    shader.dispatchRenderSize(16, 16);
+                });
 
                 specularFlipper.flip();
 
@@ -149,27 +156,30 @@ public class main implements ShaderPack {
             }
 
             if (settings.getBoolValue("Lighting_Accumulate")) {
-                stage.compute("Deferred-Accumulate-Diffuse", "program/deferred/accumulate-diffuse", "main")
-                    .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
-                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
-                    .dispatch2D(sizeX_16, sizeY_16);
+                builder.compute(stage, "Deferred-Accumulate-Diffuse", "program/deferred/accumulate-diffuse", shader -> {
+                    shader.overrideObject("texDiffuse_read", diffuseFlipper.getReader());
+                    shader.overrideObject("texDiffuse_write", diffuseFlipper.getWriter());
+                    shader.dispatchRenderSize(16, 16);
+                });
 
                 diffuseFlipper.flip();
 
-                stage.compute("Deferred-Accumulate-Specular", "program/deferred/accumulate-specular", "main")
-                    .overrideObject("texSpecular_read", specularFlipper.getReader().name())
-                    .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
-                    .dispatch2D(sizeX_16, sizeY_16);
+                builder.compute(stage, "Deferred-Accumulate-Specular", "program/deferred/accumulate-specular", shader -> {
+                    shader.overrideObject("texSpecular_read", specularFlipper.getReader());
+                    shader.overrideObject("texSpecular_write", specularFlipper.getWriter());
+                    shader.dispatchRenderSize(16, 16);
+                });
                 
                 specularFlipper.flip();
 
-                stage.compute("Deferred-Accumulate-Fill", "program/deferred/fill", "main")
-                    .overrideObject("texDiffuse_read", diffuseFlipper.getReader().name())
-                    .overrideObject("texDiffuse_write", diffuseFlipper.getWriter().name())
-                    .overrideObject("texSpecular_read", specularFlipper.getReader().name())
-                    .overrideObject("texSpecular_write", specularFlipper.getWriter().name())
-                    .exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount())
-                    .dispatch2D(sizeX_16, sizeY_16);
+                builder.compute(stage, "Deferred-Accumulate-Fill", "program/deferred/accumulate-fill", shader -> {
+                    shader.overrideObject("texDiffuse_read", diffuseFlipper.getReader());
+                    shader.overrideObject("texDiffuse_write", diffuseFlipper.getWriter());
+                    shader.overrideObject("texSpecular_read", specularFlipper.getReader());
+                    shader.overrideObject("texSpecular_write", specularFlipper.getWriter());
+                    shader.exportInt("SHARC_BUCKET_COUNT", sharc.bucketCount());
+                    shader.dispatchRenderSize(16, 16);
+                });
 
                 diffuseFlipper.flip();
                 specularFlipper.flip();
@@ -280,10 +290,8 @@ public class main implements ShaderPack {
         pipeline.combinationPass("program/post/final")
             .overrideObject("tex_read", mainFlipper.getReader().name());
 
-        mapBlockData();
-
-        for (var blockId : blocks.keys()) {
-            var blockData = blocks.get(blockId);
+        for (var blockId : builder.Blocks.keys()) {
+            var blockData = builder.Blocks.get(blockId);
             lightData.map(blockId, LightData.fromHexColor(blockData.light_color(), blockData.light_range()));
         }
 
@@ -315,7 +323,7 @@ public class main implements ShaderPack {
 
     @Override
 	public int setBlockId(IBlockState block) {
-		return blocks.getId(block);
+		return builder.Blocks.getId(block);
 	}
 
     private void withStage(PipelineConfig pipeline, ProgramStage programStage, Consumer<StageList> callback) {
@@ -323,32 +331,35 @@ public class main implements ShaderPack {
     }
 
     private void mapBlockData() {
-        blocks.map(
-            "BLOCK_WATER",
-            "water");
+        builder.mapBlock("BLOCK_WATER", builder -> builder
+            .matches("water"));
 
-        blocks.map(
-            "BLOCK_REDSTONE_TORCH",
-            "redstone_torch",
-            "#ee390c",
-            7);
+        builder.mapBlock("BLOCK_REDSTONE_TORCH", builder -> builder
+            .matches("redstone_torch")
+            .setLightColor("#ee390c")
+            .setLightRange(7));
 
-        blocks.map(
-            "BLOCK_SOUL_TORCH",
-            "soul_torch",
-            "#4794c0",
-            10);
+        builder.mapBlock("BLOCK_SEA_LANTERN", builder -> builder
+            .matches("sea_lantern")
+            .setLightColor("#cde7eb")
+            .setLightRange(15));
 
-        blocks.map(
-            "BLOCK_SEA_LANTERN",
-            "sea_lantern",
-            "#cde7eb",
-            15);
+        builder.mapBlock("BLOCK_SOUL_TORCH", builder -> builder
+            .matches("soul_torch")
+            .setLightColor("#4794c0")
+            .setLightRange(10));
 
-        blocks.map(
-            "BLOCK_TORCH",
-            "torch",
-            "#ee940c",
-            14);
+        builder.mapBlock("BLOCK_STAINED_GLASS", builder -> builder
+            .matches(new String[]{
+                "red_stained_glass",
+                "green_stained_glass",
+                "blue_stained_glass",
+                "tinted_glass"
+            }));
+
+        builder.mapBlock("BLOCK_TORCH", builder -> builder
+            .matches("torch")
+            .setLightColor("#ee940c")
+            .setLightRange(14));
     }
 }
