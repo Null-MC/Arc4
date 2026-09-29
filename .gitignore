@@ -1,3 +1,4 @@
-publish.sh
 .vscode
 bin
+*.jar
+*.sh

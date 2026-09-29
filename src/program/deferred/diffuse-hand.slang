@@ -3,7 +3,10 @@ import settings;
 import rt_pipeline;
 import lib.common;
 import lib.octohedral;
+import lib.light_data;
 
+
+static const float3 lightPos_main = float3(0.25, 0.1, -0.2);
 
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float4> texDiffuse_write;
@@ -36,23 +39,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 geo_normal = octohedral::decode(normalData.xy);
         float3 tex_normal = octohedral::decode(normalData.zw);
 
-        const float3 lightPos_main = float3(0.25, 0.1, -0.2);
         float3 hand_Light = 0.0;
 
-        if (ap.game.mainHand > 0) {
-            float3 lightPos = mul(float3x3(ap.camera.viewInv), lightPos_main);
-            int block_emission = ap.blocks[ap.game.mainHand].emission;
-
-            hand_Light += sampleLight(lightPos, localPos, geo_normal, tex_normal, block_emission);
-        }
-
-        if (ap.game.offHand > 0) {
-            float3 lightPos = mul(float3x3(ap.camera.viewInv), -lightPos_main);
-            int block_emission = ap.blocks[ap.game.offHand].emission;
-
-            hand_Light += sampleLight(lightPos, localPos, geo_normal, tex_normal, block_emission);
-        }
-
+        sampleHandLight(hand_Light, ap.game.mainHand, localPos, geo_normal, tex_normal);
+        sampleHandLight(hand_Light, ap.game.offHand, localPos, geo_normal, tex_normal);
 
         diffuse.rgb += hand_Light / PI;
     }
@@ -62,15 +52,23 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     texDiffuse_write[globalPos] = diffuse;
 }
 
-float3 sampleLight(const in float3 lightPos, const in float3 localPos, const in float3 geo_normal, const in float3 tex_normal, const in int block_emission) {
-    if (block_emission == 0) return 0.0;
+void sampleHandLight(inout float3 color, int handId, const in float3 localPos, const in float3 geo_normal, const in float3 tex_normal) {
+    if (handId <= 0) return;
 
+    half4 color_range = getLightColorRange(ap.blocks[handId].customId);
+
+    if (color_range.a == 0.0) color_range.a = half(ap.blocks[handId].emission);
+    if (color_range.a <= 0.0) return;
+
+    float3 lightPos = mul(float3x3(ap.camera.viewInv), lightPos_main);
+    float3 lightColor = getColorSpace().fromGamma(color_range.rgb) * (color_range.a/16.0h) * BlockEmission;
+    color += lightColor * sampleLight(lightPos, localPos, geo_normal, tex_normal);
+}
+
+float3 sampleLight(const in float3 lightPos, const in float3 localPos, const in float3 geo_normal, const in float3 tex_normal) {
     float3 lightDir = lightPos - localPos;
     float lightDist = length(lightDir);
     lightDir /= lightDist;
-
-    float3 lightColor = getColorSpace().fromGamma(float3(1.0));
-    float lightRange = (block_emission / 16.0) * BlockEmission;
 
     var query = HWRT.startQuery(
         localPos + 0.002 * geo_normal,
@@ -104,7 +102,7 @@ float3 sampleLight(const in float3 lightPos, const in float3 localPos, const in 
     float shadow = float(!query.hasHit());
 
     float lightF = max(dot(tex_normal, lightDir), 0.0);
-    lightF *= shadow * lightRange * rcp(1.0 + pow2(lightDist));
+    lightF *= shadow * rcp(1.0 + pow2(lightDist));
 
-    return lightF * lightColor * transmitColor;
+    return lightF * transmitColor;
 }

@@ -1,0 +1,14 @@
+BLOCK_WATER:
+  id: water
+BLOCK_REDSTONE_TORCH:
+  id: redstone_torch
+  color: #FF0000
+  range: 8
+BLOCK_SOUL_TORCH:
+  id: soul_torch
+  color: #0000FF
+  range: 12
+BLOCK_TORCH:
+  id: redstone_torch
+  color: #FFBB33
+  range: 15

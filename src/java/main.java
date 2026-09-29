@@ -2,8 +2,6 @@ import java.util.function.Consumer;
 
 import org.joml.Vector4f;
 
-import buffers.LightData;
-import buffers.LightDataList;
 import dev.irisshaders.aperture.api.*;
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.*;
@@ -15,6 +13,7 @@ import pipeline.BlockMap;
 import pipeline.Bloom;
 import pipeline.Exposure;
 import pipeline.HillaireSky;
+import pipeline.LightData;
 import pipeline.LightDataManager;
 import pipeline.Resources;
 import pipeline.Sharc;
@@ -88,11 +87,11 @@ public class main implements ShaderPack {
             .writes("data", resources.texDeferData, BlendMode.NONE);
 
         pipeline.object(ProgramUsage.TRANSLUCENT, "program/object/defer", "DeferShader")
-            .exportBool("IsTranslucent", true)
             .writes("color", resources.texDeferColor, BlendMode.NONE)
             .writes("normal", resources.texDeferNormal, BlendMode.NONE)
             .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
-            .writes("data", resources.texDeferData, BlendMode.NONE);
+            .writes("data", resources.texDeferData, BlendMode.NONE)
+            .exportBool("IsTranslucent", true);
 
         pipeline.object(ProgramUsage.PARTICLES, "program/object/defer-particle", "DeferShader")
             .writes("color", resources.texDeferColor, BlendMode.NONE)
@@ -104,7 +103,8 @@ public class main implements ShaderPack {
             .writes("color", resources.texDeferColor, BlendMode.NONE)
             .writes("normal", resources.texDeferNormal, BlendMode.NONE)
             .writes("specular", resources.texDeferSpecular, BlendMode.NONE)
-            .writes("data", resources.texDeferData, BlendMode.NONE);
+            .writes("data", resources.texDeferData, BlendMode.NONE)
+            .exportBool("IsTranslucent", true);
 
         pipeline.object(ProgramUsage.WEATHER, "program/object/weather", "WeatherShader")
             .writes("color", resources.weatherTexture);
@@ -280,7 +280,13 @@ public class main implements ShaderPack {
         pipeline.combinationPass("program/post/final")
             .overrideObject("tex_read", mainFlipper.getReader().name());
 
-        mapLights();
+        mapBlockData();
+
+        for (var blockId : blocks.keys()) {
+            var blockData = blocks.get(blockId);
+            lightData.map(blockId, LightData.fromHexColor(blockData.light_color(), blockData.light_range()));
+        }
+
         lightData.update();
     }
 
@@ -316,7 +322,33 @@ public class main implements ShaderPack {
         callback.accept(pipeline.stage(programStage));
     }
 
-    private void mapLights() {
-        lightData.map(8, LightData.fromHexColor("#FF0000", 8));
+    private void mapBlockData() {
+        blocks.map(
+            "BLOCK_WATER",
+            "water");
+
+        blocks.map(
+            "BLOCK_REDSTONE_TORCH",
+            "redstone_torch",
+            "#ee390c",
+            7);
+
+        blocks.map(
+            "BLOCK_SOUL_TORCH",
+            "soul_torch",
+            "#4794c0",
+            10);
+
+        blocks.map(
+            "BLOCK_SEA_LANTERN",
+            "sea_lantern",
+            "#cde7eb",
+            15);
+
+        blocks.map(
+            "BLOCK_TORCH",
+            "torch",
+            "#ee940c",
+            14);
     }
 }

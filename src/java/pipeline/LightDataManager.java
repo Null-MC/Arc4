@@ -3,8 +3,6 @@ package pipeline;
 import java.util.Map;
 
 import buffers.LightDataList;
-import buffers.LightData;
-
 import dev.irisshaders.aperture.api.objects.MappedBuffer;
 import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
 
@@ -26,7 +24,7 @@ public class LightDataManager {
 
     public void update() {
         int[] list = new int[256];
-        bufferMap.forEach((customId, lightData) -> list[customId] = (int)lightData);
+        bufferMap.forEach((customId, lightData) -> list[customId-1] = lightData);
         buffer.write(new LightDataList(list));
     }
 }
