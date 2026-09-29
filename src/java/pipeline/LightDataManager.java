@@ -10,7 +10,7 @@ import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
 
 
 public class LightDataManager {
-    private final Map<Integer, LightData> bufferMap;
+    private final Map<Integer, Integer> bufferMap;
     private final MappedBuffer<LightDataList> buffer;
 
 
@@ -21,12 +21,12 @@ public class LightDataManager {
     }
 
     public void map(int customId, LightData data) {
-        bufferMap.put(customId, data);
+        bufferMap.put(customId, data.data());
     }
 
     public void update() {
-        LightData[] list = new LightData[256];
-        bufferMap.forEach((customId, lightData) -> list[customId] = lightData);
+        int[] list = new int[256];
+        bufferMap.forEach((customId, lightData) -> list[customId] = (int)lightData);
         buffer.write(new LightDataList(list));
     }
 }
