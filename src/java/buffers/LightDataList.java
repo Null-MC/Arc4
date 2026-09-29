@@ -1,3 +1,5 @@
 package buffers;
 
-// public record LightDataList(LightData[] list) {}
+import dev.irisshaders.aperture.api.objects.ArraySize;
+
+public record LightDataList(@ArraySize(256) LightData[] list) {}

@@ -2,6 +2,8 @@ import java.util.function.Consumer;
 
 import org.joml.Vector4f;
 
+import buffers.LightData;
+import buffers.LightDataList;
 import dev.irisshaders.aperture.api.*;
 import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.objects.*;
@@ -13,6 +15,7 @@ import pipeline.BlockMap;
 import pipeline.Bloom;
 import pipeline.Exposure;
 import pipeline.HillaireSky;
+import pipeline.LightDataManager;
 import pipeline.Resources;
 import pipeline.Sharc;
 import pipeline.Water;
@@ -33,12 +36,14 @@ public class main implements ShaderPack {
     private Flipper<Texture2D> diffuseFlipper;
     private Flipper<Texture2D> specularFlipper;
     private BlockMap blocks = new BlockMap();
+    private LightDataManager lightData;
 
 
     @Override
 	public void configurePipeline(Screen screen, PipelineConfig pipeline) {
         var settings = pipeline.settings();
         resources = new Resources(screen, pipeline);
+        lightData = new LightDataManager(pipeline);
 
         specularFlipper = new Flipper<Texture2D>(resources.texSpecular_A, resources.texSpecular_B);
         mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
@@ -274,6 +279,9 @@ public class main implements ShaderPack {
 
         pipeline.combinationPass("program/post/final")
             .overrideObject("tex_read", mainFlipper.getReader().name());
+
+        mapLights();
+        lightData.update();
     }
 
     @Override
@@ -306,5 +314,9 @@ public class main implements ShaderPack {
 
     private void withStage(PipelineConfig pipeline, ProgramStage programStage, Consumer<StageList> callback) {
         callback.accept(pipeline.stage(programStage));
+    }
+
+    private void mapLights() {
+        lightData.map(8, LightData.fromHexColor("#FF0000", 8));
     }
 }
