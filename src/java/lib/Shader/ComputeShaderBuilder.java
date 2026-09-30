@@ -14,6 +14,11 @@ public class ComputeShaderBuilder {
         this.screen = screen;
     }
 
+    public ComputeShaderBuilder dispatch3D(int groupsX, int groupsY, int groupsZ) {
+        shader.dispatch3D(groupsX, groupsY, groupsZ);
+        return this;
+    }
+
     public ComputeShaderBuilder dispatch2D(int groupsX, int groupsY) {
         shader.dispatch2D(groupsX, groupsY);
         return this;

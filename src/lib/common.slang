@@ -33,6 +33,10 @@ half3 maxOf(half3 x, half3 y, half3 z) {
     return max(x, max(y, z));
 }
 
+float maxOf(float3 vec) {
+    return max(vec.x, max(vec.y, vec.z));
+}
+
 half3 minOf(half3 x, half3 y, half3 z) {
     return min(x, min(y, z));
 }

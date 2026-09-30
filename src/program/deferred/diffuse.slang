@@ -12,6 +12,8 @@ import lib.sky.transmit;
 import lib.sky.view;
 import lib.ray_cone;
 import lib.pbr.material;
+import lib.global_lights;
+import lib.light_data;
 
 
 [[vk::image_format("rgba16f")]]
@@ -64,7 +66,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         diffuse.rgb = (sunLight + moonLight) / PI;
         diffuse.rgb *= SampleShadowDisc(globalPos, localPos, geo_normal);
-
 
         // sample index 2: index 0 is used by SampleShadowDisc, 1 by the SSS dither below.
         float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, 2, ap.timing.frameCounter);
@@ -146,6 +147,26 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         diffuse.rgb += indirect * transmitColor;
 
+
+        // sample light list
+        float3 sectionPos = GlobalLights.getSectionPosition(localPos + 0.002 * geo_normal);
+        int sectionIndex = GlobalLights.GetMapIndex(int3(floor(sectionPos)));
+
+        if (sectionIndex >= 0) {
+            VoxelLightRange range = GlobalLightMap[sectionIndex];
+            uint count = clamp(range.count, 0u, MaxLocalLightCount);
+
+            // Pick one random light and sample
+            float r = BlueNoise::sampleAnimated1D(globalPos, 0, ap.timing.frameCounter);
+            uint i = uint(r * count);
+
+            if (count > 0 && i < GlobalMaxLightCount) {
+                VoxelLight light = GlobalLightIndex[range.start + i];
+                diffuse.rgb += sampleVoxelLight(light, localPos, geo_normal, tex_normal);
+            }
+        }
+
+
         // diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));
     }
 
@@ -182,4 +203,82 @@ float3 sampleBounce(float3 localPos, float3 localNormal, float3 albedo, half4 sp
     hit_diffuse += emission;
 
     return hit_diffuse * getColorSpace().fromGamma(albedo);
+}
+
+float3 sampleVoxelLight(const in VoxelLight light, const in float3 localPos, const in float3 geo_normal, const in float3 tex_normal) {
+    // VoxelLight light = GlobalLightIndex[range.start + i];
+    float3 lightWorldPos = light.voxelPos + 0.5;
+
+    // offset the light position towards sampling point within block bounds
+    float3 worldPos = localPos + ap.camera.position;
+    float3 fromLightWorld = worldPos - lightWorldPos;
+    float lightDist = length(fromLightWorld);
+    float3 lightDir = fromLightWorld / lightDist;
+
+    float3 invDir = rcp(lightDir + sign(lightDir) * 1e-6);
+
+    float3 t0 = -0.5 * invDir;
+    float3 t1 =  0.5 * invDir;
+
+    float3 tmin = min(t0, t1);
+    float3 tmax = max(t0, t1);
+
+    float tNear = maxOf(tmin);
+    float tFar  = minOf(tmax);
+
+    float3 lightShadow = 1.0;
+    if (tNear <= tFar && tFar >= 0.0 && lightDist > tFar + 0.002) {
+        float tClosest = tFar + 0.002;
+        lightWorldPos += lightDir * tClosest;
+
+        float3 lightLocalPos = lightWorldPos - ap.camera.position;
+
+        float3 rayOrigin = localPos + 0.002 * geo_normal;
+        float lightTraceDist = distance(rayOrigin, lightLocalPos);
+
+        lightShadow = traceLight(rayOrigin, -lightDir, lightTraceDist);
+    }
+
+    float lightF = max(dot(tex_normal, lightDir), 0.0);
+    lightF *= (1.0/PI) * rcp(1.0 + pow2(lightDist));
+
+    half4 color_range = getLightColorRange(ap.blocks[light.blockId]);
+    float3 lightColor = getColorSpace().fromGamma(color_range.rgb) * (color_range.a/16.0h) * BlockEmission;
+    return lightColor * lightShadow;
+}
+
+float3 traceLight(const in float3 rayOrigin, const in float3 rayDir, const float rayDist) {
+    var query = HWRT.startQuery(
+        rayOrigin,
+        rayDir,
+        0.0,
+        min(rayDist, 16.0),
+        HWRT.HitType.TERRAIN | HWRT.HitType.ENTITY,
+        HWRT.RTFlags.NONE);
+
+    float3 transmitColor = 1.0;
+    while (query.proceed()) {
+        let hit = query.getCandidate();
+        let hitType = hit.getGeometryIndex();
+
+        if (hitType == HWRT.RTGeometryIndex.SOLID) {
+            query.acceptCandidate();
+            continue;
+        }
+
+        let surface = HWRT.decodeHit(hit);
+        float4 hit_color = surface.albedo().sampleLevel(surface.getUV(), 0.0) * surface.getColor();
+
+        if (hitType == HWRT.RTGeometryIndex.CUTOUT) {
+            if (hit_color.a >= 0.1) query.acceptCandidate();
+            continue;
+        }
+
+        float3 hit_albedo = getColorSpace().fromGamma(hit_color.rgb);
+        transmitColor *= getGlassTint(hit_albedo, hit_color.a);
+    }
+
+    if (query.hasHit()) transmitColor = 0.0;
+
+    return transmitColor;
 }

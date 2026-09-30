@@ -55,9 +55,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 void sampleHandLight(inout float3 color, int handId, const in float3 localPos, const in float3 geo_normal, const in float3 tex_normal) {
     if (handId <= 0) return;
 
-    half4 color_range = getLightColorRange(ap.blocks[handId].customId);
-
-    if (color_range.a == 0.0) color_range.a = half(ap.blocks[handId].emission);
+    half4 color_range = getLightColorRange(ap.blocks[handId]);
     if (color_range.a <= 0.0) return;
 
     float3 lightPos = mul(float3x3(ap.camera.viewInv), lightPos_main);

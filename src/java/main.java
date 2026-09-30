@@ -9,6 +9,7 @@ import dev.irisshaders.aperture.api.pipeline.*;
 import dev.irisshaders.aperture.api.renderer.*;
 
 import pipeline.Froxels;
+import pipeline.GlobalLightList;
 import pipeline.Bloom;
 import pipeline.Exposure;
 import pipeline.HillaireSky;
@@ -74,6 +75,8 @@ public class main implements ShaderPack {
             bloom = new Bloom(screen, pipeline);
         }
 
+        new GlobalLightList(pipeline, builder);
+
         mapBlockData();
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
@@ -82,6 +85,14 @@ public class main implements ShaderPack {
             sky.renderView(stage);
 
             stage.clearTo(new Vector4f(0f), resources.weatherTexture);
+
+            builder.compute(stage, "Global-Lights-Clear", "program/pre/light-list", shader -> {
+                shader.dispatch1D(1);
+            }, "clear");
+
+            builder.compute(stage, "Global-Lights-Populate", "program/pre/light-list", shader -> {
+                shader.dispatch3D(GlobalLightList.GlobalLight_SectionSizeX, GlobalLightList.GlobalLight_SectionSizeY, GlobalLightList.GlobalLight_SectionSizeZ);
+            });
         });
         
         builder.discard(ProgramUsage.SKYBOX);
@@ -326,8 +337,23 @@ public class main implements ShaderPack {
         builder.mapBlock("BLOCK_WATER", builder -> builder
             .matches("water"));
 
+        builder.mapBlock("BLOCK_GLOWSTONE", builder -> builder
+            .matches("glowstone")
+            .setLightColor("#cebc54")
+            .setLightRange(15));
+
+        builder.mapBlock("BLOCK_LANTERN", builder -> builder
+            .matches("lantern")
+            .setLightColor("#ee940c")
+            .setLightRange(15));
+
+        builder.mapBlock("BLOCK_MAGMA", builder -> builder
+            .matches("magma_block")
+            .setLightColor("#9e7425")
+            .setLightRange(3));
+
         builder.mapBlock("BLOCK_REDSTONE_TORCH", builder -> builder
-            .matches("redstone_torch")
+            .matches(new String[]{"redstone_torch", "redstone_wall_torch"})
             .setLightColor("#ee390c")
             .setLightRange(7));
 
@@ -337,7 +363,7 @@ public class main implements ShaderPack {
             .setLightRange(15));
 
         builder.mapBlock("BLOCK_SOUL_TORCH", builder -> builder
-            .matches("soul_torch")
+            .matches(new String[]{"soul_torch", "soul_wall_torch"})
             .setLightColor("#4794c0")
             .setLightRange(10));
 
@@ -350,7 +376,7 @@ public class main implements ShaderPack {
             }));
 
         builder.mapBlock("BLOCK_TORCH", builder -> builder
-            .matches("torch")
+            .matches(new String[]{"torch", "wall_torch"})
             .setLightColor("#ee940c")
             .setLightRange(14));
     }

@@ -3,12 +3,14 @@ import settings;
 import lib.common;
 import lib.color_transformer;
 import lib.noise.bayer;
+import lib.text;
 
 import lib.sky.transmit;
 import lib.sky.multiscatter;
 import lib.sky.view;
 import lib.exposure;
 import lib.octohedral;
+import lib.global_lights;
 
 
 extern static const bool DebugDefer = false;
@@ -79,6 +81,10 @@ float3 main(float2 fragPos: SV_Position) {
     }
 
     color = linearToSrgb(color);
+
+    beginText(int2(fragPos*0.5), int2(4, ap.game.screenSize.y/2 - 32));
+    Print::UnsignedInt(GlobalLightCounter[0].load());
+    endText(color);
 
     const float ditherScale = rcp(255.0);
     color += (GetBayerValue(uv) - 0.5) * ditherScale;
