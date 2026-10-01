@@ -11,6 +11,7 @@ import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.view;
+import lib.light.attenuation;
 
 
 Texture2D<half4> texDeferNormal;
@@ -138,7 +139,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         bool hit_is_sss = hit_sss > sssDither;
         
         float hit_emission = mat_emission(hit_specular);
-        hit_emission *= rcp(1.0 + pow2(hitDistance));
+        hit_emission *= Attenuation::getExponential(hitDistance);
 
         pathPositions[pathLength] = hit_localPos;
         pathNormals[pathLength] = hit_localNormal;

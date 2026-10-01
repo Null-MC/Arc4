@@ -11,6 +11,7 @@ import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.view;
+import lib.light.attenuation;
 
 
 [[vk::image_format("rgba16f")]]
@@ -151,7 +152,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 half4 hit_specularMap = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
 
                 float hit_emission = mat_emission(hit_specularMap);
-                hit_emission *= rcp(1.0 + pow2(hitDistance));
+                hit_emission *= Attenuation::getExponential(hitDistance);
                 hitDiffuse += hit_emission;
                 
                 sampleDiffuse = hitDiffuse * getColorSpace().fromGamma(hit_albedo);

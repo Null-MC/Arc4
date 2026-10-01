@@ -16,6 +16,7 @@ import lib.pbr.hcm;
 import lib.pbr.ggx;
 import lib.pbr.material;
 import lib.ray_cone;
+import lib.light.attenuation;
 
 
 static const int MaxRefractInterfaces = 1;
@@ -297,7 +298,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             // float hitDistance = distance(localPos, hit_localPos);
 
             // hit_diffuse += mat_emission(hit_specular);
-            float hit_att = rcp(1.0 + pow2(traceDist));
+            float hit_att = Attenuation::getExponential(traceDist);
             hit_att = lerp(1.0, hit_att, roughness);
             hit_diffuse += hit_att * mat_emission(hit_specular);
 

@@ -43,6 +43,7 @@ public class main implements ShaderPack {
         resources = new Resources(screen, pipeline);
 
         builder = new ShaderBuilder(screen, pipeline);
+        blocks.map(builder);
 
         specularFlipper = new Flipper<Texture2D>(resources.texSpecular_A, resources.texSpecular_B);
         mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
@@ -75,9 +76,7 @@ public class main implements ShaderPack {
             bloom = new Bloom(screen, pipeline);
         }
 
-        new GlobalLightList(pipeline, builder);
-
-        mapBlockData();
+        var lightList = new GlobalLightList(pipeline, builder);
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);
@@ -86,13 +85,7 @@ public class main implements ShaderPack {
 
             stage.clearTo(new Vector4f(0f), resources.weatherTexture);
 
-            builder.compute(stage, "Global-Lights-Clear", "program/pre/light-list", shader -> {
-                shader.dispatch1D(1);
-            }, "clear");
-
-            builder.compute(stage, "Global-Lights-Populate", "program/pre/light-list", shader -> {
-                shader.dispatch3D(GlobalLightList.GlobalLight_SectionSizeX, GlobalLightList.GlobalLight_SectionSizeY, GlobalLightList.GlobalLight_SectionSizeZ);
-            });
+            lightList.render(stage, builder);
         });
         
         builder.discard(ProgramUsage.SKYBOX);
@@ -331,53 +324,5 @@ public class main implements ShaderPack {
 
     private void withStage(PipelineConfig pipeline, ProgramStage programStage, Consumer<StageList> callback) {
         callback.accept(pipeline.stage(programStage));
-    }
-
-    private void mapBlockData() {
-        builder.mapBlock("BLOCK_WATER", builder -> builder
-            .matches("water"));
-
-        builder.mapBlock("BLOCK_GLOWSTONE", builder -> builder
-            .matches("glowstone")
-            .setLightColor("#cebc54")
-            .setLightRange(15));
-
-        builder.mapBlock("BLOCK_LANTERN", builder -> builder
-            .matches("lantern")
-            .setLightColor("#ee940c")
-            .setLightRange(15));
-
-        builder.mapBlock("BLOCK_MAGMA", builder -> builder
-            .matches("magma_block")
-            .setLightColor("#9e7425")
-            .setLightRange(3));
-
-        builder.mapBlock("BLOCK_REDSTONE_TORCH", builder -> builder
-            .matches(new String[]{"redstone_torch", "redstone_wall_torch"})
-            .setLightColor("#ee390c")
-            .setLightRange(7));
-
-        builder.mapBlock("BLOCK_SEA_LANTERN", builder -> builder
-            .matches("sea_lantern")
-            .setLightColor("#cde7eb")
-            .setLightRange(15));
-
-        builder.mapBlock("BLOCK_SOUL_TORCH", builder -> builder
-            .matches(new String[]{"soul_torch", "soul_wall_torch"})
-            .setLightColor("#4794c0")
-            .setLightRange(10));
-
-        builder.mapBlock("BLOCK_STAINED_GLASS", builder -> builder
-            .matches(new String[]{
-                "red_stained_glass",
-                "green_stained_glass",
-                "blue_stained_glass",
-                "tinted_glass"
-            }));
-
-        builder.mapBlock("BLOCK_TORCH", builder -> builder
-            .matches(new String[]{"torch", "wall_torch"})
-            .setLightColor("#ee940c")
-            .setLightRange(14));
     }
 }

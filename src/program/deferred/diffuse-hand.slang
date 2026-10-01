@@ -3,7 +3,8 @@ import settings;
 import rt_pipeline;
 import lib.common;
 import lib.octohedral;
-import lib.light_data;
+import lib.light.data;
+import lib.light.attenuation;
 
 
 static const float3 lightPos_main = float3(0.25, 0.1, -0.2);
@@ -100,7 +101,7 @@ float3 sampleLight(const in float3 lightPos, const in float3 localPos, const in 
     float shadow = float(!query.hasHit());
 
     float lightF = max(dot(tex_normal, lightDir), 0.0);
-    lightF *= shadow * rcp(1.0 + pow2(lightDist));
+    lightF *= shadow * Attenuation::getExponential(lightDist);
 
     return lightF * transmitColor;
 }

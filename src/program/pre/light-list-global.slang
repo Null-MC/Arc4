@@ -1,6 +1,6 @@
 import aperture;
 import lib.common;
-import lib.global_lights;
+import lib.light.list;
 
 
 groupshared Atomic<uint> shared_counter;
@@ -18,12 +18,16 @@ struct ComputeInput {
 [[shader("compute")]]
 [numthreads(1)]
 void clear() {
-    GlobalLightCounter[0].store(0u);
+    LightListCounters[0].global.store(0u);
+    LightListCounters[0].local.store(0u);
 }
 
 [[shader("compute")]]
 [numthreads(8,4,8)]
 void main(ComputeInput input) {
+    int map_index = GlobalLights.GetMapIndex(input.groupPos);
+    if (map_index < 0) return;
+
     // Intialize shared counter
     if (input.localIndex == 0u) {
         shared_counter.store(0u);
@@ -32,7 +36,7 @@ void main(ComputeInput input) {
     GroupMemoryBarrierWithGroupSync();
 
     // Sample voxels for lights
-    int3 worldOffset = int3(floor(ap.camera.position / 8.0)) - GlobalLight_SectionSize/2;
+    int3 worldOffset = int3(floor(ap.camera.position / 8.0)) - LightList_SectionSize/2;
     int3 worldPos = worldOffset*8 + input.globalPos * int3(1,2,1);
 
     int3 v1 = worldPos;
@@ -54,16 +58,18 @@ void main(ComputeInput input) {
     count = min(count, MaxLocalLightCount);
 
     if (input.localIndex == 0u) {
-        global_start = GlobalLightCounter[0].add(count);
+        global_start = LightListCounters[0].global.add(count);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    // Copy shared lights to global light list
-    int map_index = GlobalLights.GetMapIndex(input.groupPos);
-    if (map_index < 0) return;
+    // avoid exceeding the global light list capacity
+    count = min(count, LightList_GlobalMaxLightCount - global_start);
+    count = max(count, 0);
 
+    // Copy shared lights to global light list
     GlobalLightMap[map_index] = VoxelLightRange(global_start, count);
+    if (count == 0) return;
 
     [ForceUnroll]
     for (int i = 0; i < 2; i++) {
@@ -71,7 +77,7 @@ void main(ComputeInput input) {
         if (i_local >= count) break;
 
         uint i_global = global_start + i_local;
-        if (i_global >= GlobalMaxLightCount) break;
+        if (i_global >= LightList_GlobalMaxLightCount) break;
 
         GlobalLightIndex[i_global] = shared_lights[i_local];
     }
@@ -79,7 +85,7 @@ void main(ComputeInput input) {
 
 void insertLocalLight(int3 localPos, int blockId) {
     int i = shared_counter.increment();
-    if (i >= MaxLocalLightCount) return;
+    if (i >= LightList_LocalMaxLightCount) return;
 
     shared_lights[i] = VoxelLight(localPos, blockId);
 }

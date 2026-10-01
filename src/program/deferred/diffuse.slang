@@ -12,8 +12,9 @@ import lib.sky.transmit;
 import lib.sky.view;
 import lib.ray_cone;
 import lib.pbr.material;
-import lib.global_lights;
-import lib.light_data;
+import lib.light.list;
+import lib.light.data;
+import lib.light.attenuation;
 
 
 [[vk::image_format("rgba16f")]]
@@ -153,16 +154,16 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         int sectionIndex = GlobalLights.GetMapIndex(int3(floor(sectionPos)));
 
         if (sectionIndex >= 0) {
-            VoxelLightRange range = GlobalLightMap[sectionIndex];
+            VoxelLightRange range = LocalLightMap[sectionIndex];
             uint count = clamp(range.count, 0u, MaxLocalLightCount);
 
             // Pick one random light and sample
             float r = BlueNoise::sampleAnimated1D(globalPos, 0, ap.timing.frameCounter);
             uint i = uint(r * count);
 
-            if (count > 0 && i < GlobalMaxLightCount) {
-                VoxelLight light = GlobalLightIndex[range.start + i];
-                diffuse.rgb += sampleVoxelLight(light, localPos, geo_normal, tex_normal);
+            if (count > 0 && i < MaxLocalLightCount) {
+                VoxelLight light = LocalLightIndex[range.start + i];
+                diffuse.rgb += sampleVoxelLight(light, localPos, geo_normal, tex_normal) * count;
             }
         }
 
@@ -199,7 +200,7 @@ float3 sampleBounce(float3 localPos, float3 localNormal, float3 albedo, half4 sp
     // var mip = cone2.CalculateMipLevel(size.z);
 
     float emission = mat_emission(specularMap);
-    emission *= rcp(1.0 + pow2(hitDistance));
+    emission *= Attenuation::getExponential(hitDistance);
     hit_diffuse += emission;
 
     return hit_diffuse * getColorSpace().fromGamma(albedo);
@@ -227,7 +228,7 @@ float3 sampleVoxelLight(const in VoxelLight light, const in float3 localPos, con
     float tFar  = minOf(tmax);
 
     float3 lightShadow = 1.0;
-    if (tNear <= tFar && tFar >= 0.0 && lightDist > tFar + 0.002) {
+    if (tNear <= tFar && tFar >= 0.0) {
         float tClosest = tFar + 0.002;
         lightWorldPos += lightDir * tClosest;
 
@@ -239,12 +240,14 @@ float3 sampleVoxelLight(const in VoxelLight light, const in float3 localPos, con
         lightShadow = traceLight(rayOrigin, -lightDir, lightTraceDist);
     }
 
-    float lightF = max(dot(tex_normal, lightDir), 0.0);
-    lightF *= (1.0/PI) * rcp(1.0 + pow2(lightDist));
-
     half4 color_range = getLightColorRange(ap.blocks[light.blockId]);
     float3 lightColor = getColorSpace().fromGamma(color_range.rgb) * (color_range.a/16.0h) * BlockEmission;
-    return lightColor * lightShadow;
+
+    float lightF = (1.0/PI) * max(dot(tex_normal, -lightDir), 0.0);
+    // lightF *= Attenuation::getExponential(lightDist);
+    lightF *= Attenuation::getLinear(lightDist, color_range.a);
+
+    return lightColor * lightShadow * lightF;
 }
 
 float3 traceLight(const in float3 rayOrigin, const in float3 rayDir, const float rayDist) {
