@@ -14,6 +14,7 @@ import lib.light.list;
 
 
 extern static const bool DebugDefer = false;
+extern static const bool Debug_LightList = true;
 
 Texture2D<float3> tex_read;
 
@@ -82,14 +83,16 @@ float3 main(float2 fragPos: SV_Position) {
 
     color = linearToSrgb(color);
 
-    beginText(int2(fragPos*0.5), int2(4, ap.game.screenSize.y/2 - 32));
-    Print::String(uint[](_G, _l, _o, _b, _a, _l, _colon, _space));
-    Print::UnsignedInt(LightListCounters[0].global.load());
-    Print::Line();
-    Print::String(uint[](_L, _o, _c, _a, _l, _colon, _space));
-    Print::UnsignedInt(LightListCounters[0].local.load());
-    Print::Line();
-    endText(color);
+    if (Debug_LightList) {
+        beginText(int2(fragPos*0.5), int2(4, ap.game.screenSize.y/2 - 32));
+        Print::String(uint[](_G, _l, _o, _b, _a, _l, _colon, _space));
+        Print::UnsignedInt(LightListCounters[0].global.load());
+        Print::Line();
+        Print::String(uint[](_L, _o, _c, _a, _l, _colon, _space));
+        Print::UnsignedInt(LightListCounters[0].local.load());
+        Print::Line();
+        endText(color);
+    }
 
     const float ditherScale = rcp(255.0);
     color += (GetBayerValue(uv) - 0.5) * ditherScale;

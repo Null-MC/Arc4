@@ -11,6 +11,8 @@ import lib.octohedral;
 import lib.sharc;
 
 
+static const bool Debug_Occupancy = false;
+
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float3> texMain_write;
 
@@ -75,21 +77,31 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 worldPos = localPos + ap.camera.position;
             SharcDebugSample sample = sharcDebugSample(worldPos, geo_normal);
-            float3 occupancyColor = lerp(
-                float3(0.01, 0.01, 0.02),
-                float3(0.08, 0.8, 0.16),
-                sample.occupancy
-            );
-            occupancyColor = lerp(occupancyColor, float3(1.0, 0.12, 0.02), sample.collisions);
 
-            if (sample.matched) {
-                float confidence = sample.confidence;
-                float3 radianceColor = max(sample.radiance, 0.05);
-                color.rgb = lerp(occupancyColor, radianceColor, 0.7);
-                color.rgb *= lerp(0.35, 1.5, confidence);
+            if (Debug_Occupancy) {
+                float3 occupancyColor = lerp(
+                    float3(0.01, 0.01, 0.02),
+                    float3(0.08, 0.8, 0.16),
+                    sample.occupancy);
+
+                // blend red for collisions
+                occupancyColor = lerp(occupancyColor, float3(1.0, 0.12, 0.02), sample.collisions);
+
+                if (sample.matched) {
+                    float confidence = sample.confidence;
+                    float3 radianceColor = max(sample.radiance, 0.05);
+                    color.rgb = lerp(occupancyColor, radianceColor, 0.7);
+                    color.rgb *= lerp(0.35, 1.5, confidence);
+                }
+                else {
+                    color.rgb = occupancyColor;
+                }
             }
             else {
-                color.rgb = occupancyColor;
+                color.rgb = 0.0;
+                if (sample.matched) {
+                    color.rgb = max(sample.radiance, 0.05) * sample.confidence;
+                }
             }
         }
     }

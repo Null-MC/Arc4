@@ -11,6 +11,7 @@ import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.view;
+import lib.light.sampling;
 import lib.light.attenuation;
 
 
@@ -139,6 +140,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 float3 hitDiffuse = (sunLight + moonLight) / PI;
 
                 hitDiffuse *= SampleShadow(hit_localPos, hit_localNormal);
+
+                hitDiffuse += sampleRandomVoxelLight(globalPos.xy, localPos, geo_normal, tex_normal);
 
                 float confidence;
                 float3 hitWorldPos = hit_localPos + ap.camera.position;

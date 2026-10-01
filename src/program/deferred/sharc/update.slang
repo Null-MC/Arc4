@@ -11,6 +11,7 @@ import lib.noise.blue;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.view;
+import lib.light.sampling;
 import lib.light.attenuation;
 
 
@@ -202,5 +203,9 @@ float3 directLighting(
     }
 
     float3 directLight = (sunLight + moonLight);// / PI;
-    return directLight * SampleShadowDisc(globalPos, localPos, geo_normal);
+    directLight *= SampleShadowDisc(globalPos, localPos, geo_normal);
+
+    directLight += sampleRandomVoxelLight(globalPos, localPos, geo_normal, tex_normal);
+
+    return directLight;
 }
