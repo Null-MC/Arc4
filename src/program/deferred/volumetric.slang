@@ -109,7 +109,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             inScattering = skySample.mieScattering * (miePhaseValue_sun * sunLight + miePhaseValue_moon * moonLight) * shadowF + Sky_MinLight;
 
             float cameraSkyLight = ap.camera.brightness.y;
-            inScattering += planet.sampleMultiScatter(skyPos, sunDir) * cameraSkyLight;
+            float3 indirect = planet.sampleMultiScatter(skyPos, sunDir);
+            inScattering += getColorSpace().fromLinear(indirect) * cameraSkyLight;
         }
 
         // Integrated scattering within path segment.

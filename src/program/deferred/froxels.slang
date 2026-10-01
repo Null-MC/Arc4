@@ -18,7 +18,7 @@ extern static const uint Froxel_SkyLight_StepCount = 8;
 extern static const bool Froxel_TraceIndirect = false;
 
 [[vk::image_format("rgba16f")]]
-RWTexture3D<half4> texFroxel_write;
+RWTexture3D<float4> texFroxel_write;
 
 Texture3D<half4> texFroxel_read;
 SamplerState froxelSampler;
@@ -53,7 +53,7 @@ void main(ComputeInput input) {
     float3 localDir = normalize(localPos);
 
     // float3 skyLightDir = normalize(ap.celestial.position);
-    float3 shadowF = SampleShadow(localPos, 0.0);
+    // float3 shadowF = SampleShadow(localPos, 0.0);
 
     // float dither = hash13(seed);
 
@@ -71,6 +71,36 @@ void main(ComputeInput input) {
     float atmoDist = planet.rayIntersectsAtmosphere(skyPos, skyLightDir);
     // TODO: use min of ground dist?
     float stepDist = atmoDist / Froxel_SkyLight_StepCount;
+
+    // float3 scattering = 0.0;
+    // float3 transmittance = 1.0;
+
+
+    AtmosphereSample skySample;
+    float altitude_KM = planet.getSkyAltitude(skyPos);
+    sky.Sample(altitude_KM, skySample);
+
+    // float3 sampleTransmittance = exp(-max(stepDist * skySample.extinction, 0.0));
+
+    // Integrate within each segment.
+    // float3 scatteringNoPhase = skySample.rayleighScattering + skySample.mieScattering;
+    // float3 scatteringF = (scatteringNoPhase - scatteringNoPhase * sampleTransmittance) / skySample.extinction;
+    // lumFactor += transmittance * scatteringF;
+
+    float3 sunLight = planet.sampleTransmit(skyPos, sunDir) * SunColor;
+    float3 moonLight = planet.sampleTransmit(skyPos, moonDir) * MoonColor;
+    float3 skyLight = miePhase_sun * sunLight + miePhase_moon * moonLight;
+
+    // float3 shadowColor = SampleShadow(localPos, 0.0);
+    // float3 inScatterFinal = skySample.mieScattering * skyLight * shadowColor + Sky_MinLight;
+    float3 inScatterFinal = skySample.mieScattering * skyLight;
+
+
+    // Integrated scattering within path segment.
+    // float3 scatteringIntegral = (inScattering * saturate(1.0 - sampleTransmittance)) / max(skySample.extinction, 1e-3);
+
+    // scattering += scatteringIntegral * transmittance;
+    // transmittance *= sampleTransmittance;
 
     float3 scattering = 0.0;
     float3 transmittance = 1.0;
@@ -100,6 +130,12 @@ void main(ComputeInput input) {
         scattering += scatteringIntegral * transmittance;
         transmittance *= sampleTransmittance;
     }
+
+    inScatterFinal = inScatterFinal * transmittance + scattering;
+
+    inScatterFinal *= SampleShadow(localPos, 0.0);
+
+    inScatterFinal += Sky_MinLight;
 
     float3 indirect;
     if (Froxel_TraceIndirect) {
@@ -135,8 +171,12 @@ void main(ComputeInput input) {
         indirect = getColorSpace().fromLinear(indirect) * cameraSkyLight;
     }
 
+    // scattering = indirect * transmittance + scattering * shadowF;
+    inScatterFinal += indirect;
 
-    scattering = indirect * transmittance + scattering * shadowF;
+
+    // TODO: random block light sample
+
 
 
     // project last frame position and accumulate
@@ -157,9 +197,12 @@ void main(ComputeInput input) {
     }
 
     half counter = (half)clamp(froxelPrev.a + 1.0, 1.0, Froxel_MaxFrames);
-    float3 final = ap.timing.frameCounter > 0 ? lerp(froxelPrev.rgb, half3(scattering), rcp(counter)) : half3(scattering);
 
-    final = clamp(final, 0.0, half.maxValue);
+    if (ap.timing.frameCounter > 0) {
+        inScatterFinal = lerp(froxelPrev.rgb, inScatterFinal, rcp(counter));
+    }
 
-    texFroxel_write[input.globalPos] = half4(final, counter);
+    inScatterFinal = clamp(inScatterFinal, 0.0, half.maxValue);
+
+    texFroxel_write[input.globalPos] = float4(inScatterFinal, counter);
 }
