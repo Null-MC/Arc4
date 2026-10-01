@@ -9,7 +9,7 @@ import dev.irisshaders.aperture.api.pipeline.*;
 import dev.irisshaders.aperture.api.renderer.*;
 
 import pipeline.Froxels;
-import pipeline.GlobalLightList;
+import pipeline.LightList;
 import pipeline.Bloom;
 import pipeline.Exposure;
 import pipeline.HillaireSky;
@@ -76,7 +76,7 @@ public class main implements ShaderPack {
             bloom = new Bloom(screen, pipeline);
         }
 
-        var lightList = new GlobalLightList(pipeline, builder);
+        var lightList = new LightList(pipeline, builder);
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);

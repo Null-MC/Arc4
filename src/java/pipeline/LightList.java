@@ -4,19 +4,19 @@ import dev.irisshaders.aperture.api.commands.StageList;
 import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
 import lib.Shader.ShaderBuilder;
 
-public class GlobalLightList {
+public class LightList {
     public static final int SectionSizeX = 9;
     public static final int SectionSizeY = 7;
     public static final int SectionSizeZ = 9;
 
     public static final int GlobalMaxLightCount = 16384;
-    public static final int LocalMaxLightCount = 65536;
+    public static final int LocalMaxLightCount = 1048576;
 
     public static final int MaxIndexCount = SectionSizeX * SectionSizeY * SectionSizeZ;
 
     
 
-    public GlobalLightList(PipelineConfig pipeline, ShaderBuilder builder) {
+    public LightList(PipelineConfig pipeline, ShaderBuilder builder) {
         pipeline.buffer("LightListCounters", 8);
         pipeline.buffer("GlobalLightIndex", GlobalMaxLightCount * 16);
         pipeline.buffer("GlobalLightMap", MaxIndexCount * 8);
@@ -39,11 +39,11 @@ public class GlobalLightList {
         }, "clear");
 
         builder.compute(stage, "Global-Lights-Populate", "program/pre/light-list-global", shader -> {
-            shader.dispatch3D(GlobalLightList.SectionSizeX, GlobalLightList.SectionSizeY, GlobalLightList.SectionSizeZ);
+            shader.dispatch3D(LightList.SectionSizeX, LightList.SectionSizeY, LightList.SectionSizeZ);
         });
 
         builder.compute(stage, "Local-Lights-Populate", "program/pre/light-list-local", shader -> {
-            shader.dispatch3D(GlobalLightList.SectionSizeX, GlobalLightList.SectionSizeY, GlobalLightList.SectionSizeZ);
+            shader.dispatch3D(LightList.SectionSizeX, LightList.SectionSizeY, LightList.SectionSizeZ);
         });
     }
 }
