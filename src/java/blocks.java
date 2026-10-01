@@ -9,6 +9,11 @@ public class blocks {
         builder.mapBlock("BLOCK_WATER", b -> b
             .matches("water"));
 
+        builder.mapBlock("BLOCK_LAVA", b -> b
+            .matches("lava")
+            .setLightColor("#d6801e")
+            .setLightRange(15));
+
         builder.mapBlock("BLOCK_CAMPFIRE_LIT", b -> b
             .matches("campfire")
             .setLightColor(color_Fire)
@@ -31,8 +36,13 @@ public class blocks {
 
         builder.mapBlock("BLOCK_FROGLIGHT_VERDANT", b -> b
             .matches("verdant_froglight")
-            .setLightColor("#25d86a")
+            .setLightColor("#388a57")
             .setLightRange(15));
+
+        builder.mapBlock("BLOCK_GLOW_LICHEN", b -> b
+            .matches("glow_lichen")
+            .setLightColor("#3b8164")
+            .setLightRange(7));
 
         builder.mapBlock("BLOCK_GLOWSTONE", b -> b
             .matches("glowstone")
@@ -58,6 +68,11 @@ public class blocks {
             .matches("sea_lantern")
             .setLightColor("#cde7eb")
             .setLightRange(15));
+
+        builder.mapBlock("BLOCK_SOUL_CAMPFIRE", b -> b
+            .matches("soul_campfire")
+            .setLightColor(color_SoulFire)
+            .setLightRange(10));
 
         builder.mapBlock("BLOCK_SOUL_FIRE", b -> b
             .matches("soul_fire")

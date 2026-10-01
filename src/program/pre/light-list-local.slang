@@ -35,7 +35,9 @@ void main(ComputeInput input) {
     int3 worldOffset = int3(floor(ap.camera.position / 8.0)) - LightList_SectionSize/2;
     SectionBounds sectionBounds;
 
-    for (int z = 0; z < 26; z++) {
+    for (int z = 0; z < NEIGHBOR_OFFSETS.getCount(); z++) {
+        if (shared_counter.load() >= MaxLocalLightCount) break;
+
         int3 neighbor_pos = input.groupPos + NEIGHBOR_OFFSETS[z];
         int neighbor_map_index = GlobalLights.GetMapIndex(neighbor_pos);
         if (neighbor_map_index < 0) continue;
@@ -136,23 +138,159 @@ struct SectionBounds {
     }
 };
 
-static const int3 NEIGHBOR_OFFSETS[26] = {
-    // --- 6 Face Neighbors (Distance = 1.0) ---
-    int3( 1,  0,  0), int3(-1,  0,  0),
-    int3( 0,  1,  0), int3( 0, -1,  0),
-    int3( 0,  0,  1), int3( 0,  0, -1),
+// static const int3 NEIGHBOR_OFFSETS[26] = {
+//     // --- 6 Face Neighbors (Distance = 1.0) ---
+//     int3( 1,  0,  0), int3(-1,  0,  0),
+//     int3( 0,  1,  0), int3( 0, -1,  0),
+//     int3( 0,  0,  1), int3( 0,  0, -1),
 
-    // --- 12 Edge Neighbors (Distance ~1.41) ---
-    int3( 1,  1,  0), int3( 1, -1,  0),
-    int3(-1,  1,  0), int3(-1, -1,  0),
-    int3( 1,  0,  1), int3( 1,  0, -1),
-    int3(-1,  0,  1), int3(-1,  0, -1),
-    int3( 0,  1,  1), int3( 0,  1, -1),
-    int3( 0, -1,  1), int3( 0, -1, -1),
+//     // --- 12 Edge Neighbors (Distance ~1.41) ---
+//     int3( 1,  1,  0), int3( 1, -1,  0),
+//     int3(-1,  1,  0), int3(-1, -1,  0),
+//     int3( 1,  0,  1), int3( 1,  0, -1),
+//     int3(-1,  0,  1), int3(-1,  0, -1),
+//     int3( 0,  1,  1), int3( 0,  1, -1),
+//     int3( 0, -1,  1), int3( 0, -1, -1),
 
-    // --- 8 Corner Neighbors (Distance ~1.73) ---
-    int3( 1,  1,  1), int3( 1,  1, -1),
-    int3( 1, -1,  1), int3( 1, -1, -1),
-    int3(-1,  1,  1), int3(-1,  1, -1),
-    int3(-1, -1,  1), int3(-1, -1, -1)
+//     // --- 8 Corner Neighbors (Distance ~1.73) ---
+//     int3( 1,  1,  1), int3( 1,  1, -1),
+//     int3( 1, -1,  1), int3( 1, -1, -1),
+//     int3(-1,  1,  1), int3(-1,  1, -1),
+//     int3(-1, -1,  1), int3(-1, -1, -1)
+// };
+
+static const int3 NEIGHBOR_OFFSETS[124] = {
+    // Squared distance = 1
+    int3(-1,  0,  0),
+    int3( 0, -1,  0),
+    int3( 0,  0, -1),
+    int3( 0,  0,  1),
+    int3( 0,  1,  0),
+    int3( 1,  0,  0),
+    // Squared distance = 2
+    int3(-1, -1,  0),
+    int3(-1,  0, -1),
+    int3(-1,  0,  1),
+    int3(-1,  1,  0),
+    int3( 0, -1, -1),
+    int3( 0, -1,  1),
+    int3( 0,  1, -1),
+    int3( 0,  1,  1),
+    int3( 1, -1,  0),
+    int3( 1,  0, -1),
+    int3( 1,  0,  1),
+    int3( 1,  1,  0),
+    // Squared distance = 3
+    int3(-1, -1, -1),
+    int3(-1, -1,  1),
+    int3(-1,  1, -1),
+    int3(-1,  1,  1),
+    int3( 1, -1, -1),
+    int3( 1, -1,  1),
+    int3( 1,  1, -1),
+    int3( 1,  1,  1),
+    // Squared distance = 4
+    int3(-2,  0,  0),
+    int3( 0, -2,  0),
+    int3( 0,  0, -2),
+    int3( 0,  0,  2),
+    int3( 0,  2,  0),
+    int3( 2,  0,  0),
+    // Squared distance = 5
+    int3(-2, -1,  0),
+    int3(-2,  0, -1),
+    int3(-2,  0,  1),
+    int3(-2,  1,  0),
+    int3(-1, -2,  0),
+    int3(-1,  0, -2),
+    int3(-1,  0,  2),
+    int3(-1,  2,  0),
+    int3( 0, -2, -1),
+    int3( 0, -2,  1),
+    int3( 0, -1, -2),
+    int3( 0, -1,  2),
+    int3( 0,  1, -2),
+    int3( 0,  1,  2),
+    int3( 0,  2, -1),
+    int3( 0,  2,  1),
+    int3( 1, -2,  0),
+    int3( 1,  0, -2),
+    int3( 1,  0,  2),
+    int3( 1,  2,  0),
+    int3( 2, -1,  0),
+    int3( 2,  0, -1),
+    int3( 2,  0,  1),
+    int3( 2,  1,  0),
+    // Squared distance = 6
+    int3(-2, -1, -1),
+    int3(-2, -1,  1),
+    int3(-2,  1, -1),
+    int3(-2,  1,  1),
+    int3(-1, -2, -1),
+    int3(-1, -2,  1),
+    int3(-1, -1, -2),
+    int3(-1, -1,  2),
+    int3(-1,  1, -2),
+    int3(-1,  1,  2),
+    int3(-1,  2, -1),
+    int3(-1,  2,  1),
+    int3( 1, -2, -1),
+    int3( 1, -2,  1),
+    int3( 1, -1, -2),
+    int3( 1, -1,  2),
+    int3( 1,  1, -2),
+    int3( 1,  1,  2),
+    int3( 1,  2, -1),
+    int3( 1,  2,  1),
+    int3( 2, -1, -1),
+    int3( 2, -1,  1),
+    int3( 2,  1, -1),
+    int3( 2,  1,  1),
+    // Squared distance = 8
+    int3(-2, -2,  0),
+    int3(-2,  0, -2),
+    int3(-2,  0,  2),
+    int3(-2,  2,  0),
+    int3( 0, -2, -2),
+    int3( 0, -2,  2),
+    int3( 0,  2, -2),
+    int3( 0,  2,  2),
+    int3( 2, -2,  0),
+    int3( 2,  0, -2),
+    int3( 2,  0,  2),
+    int3( 2,  2,  0),
+    // Squared distance = 9
+    int3(-2, -2, -1),
+    int3(-2, -2,  1),
+    int3(-2, -1, -2),
+    int3(-2, -1,  2),
+    int3(-2,  1, -2),
+    int3(-2,  1,  2),
+    int3(-2,  2, -1),
+    int3(-2,  2,  1),
+    int3(-1, -2, -2),
+    int3(-1, -2,  2),
+    int3(-1,  2, -2),
+    int3(-1,  2,  2),
+    int3( 1, -2, -2),
+    int3( 1, -2,  2),
+    int3( 1,  2, -2),
+    int3( 1,  2,  2),
+    int3( 2, -2, -1),
+    int3( 2, -2,  1),
+    int3( 2, -1, -2),
+    int3( 2, -1,  2),
+    int3( 2,  1, -2),
+    int3( 2,  1,  2),
+    int3( 2,  2, -1),
+    int3( 2,  2,  1),
+    // Squared distance = 12
+    int3(-2, -2, -2),
+    int3(-2, -2,  2),
+    int3(-2,  2, -2),
+    int3(-2,  2,  2),
+    int3( 2, -2, -2),
+    int3( 2, -2,  2),
+    int3( 2,  2, -2),
+    int3( 2,  2,  2),
 };

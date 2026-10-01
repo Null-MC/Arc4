@@ -16,7 +16,8 @@ import lib.pbr.lazanyi;
 import lib.pbr.hcm;
 import lib.pbr.ggx;
 import lib.pbr.material;
-import lib.ray_cone;
+import lib.light.sampling;
+// import lib.ray_cone;
 
 
 static const int MaxRefractInterfaces = 1;
@@ -274,6 +275,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 hit_diffuse = (sunLight + moonLight) / PI;
             hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
+
+            // sample random light from local list
+            hit_diffuse += sampleRandomVoxelLight(globalPos, hit_localPos, hit_localNormal, hit_localNormal);
 
             hit_diffuse += sampleIndirect(globalPos, hit_localPos, hit_localNormal);
 

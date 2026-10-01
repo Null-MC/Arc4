@@ -142,7 +142,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             half4 hit_specularMap = blockAtlasS.SampleLevel(apt_nearestSampler, hit_uv, 0.0);
 
             hitDistance = distance(localPos, hit_localPos);
-            indirect = sampleBounce(hit_localPos, hit_localNormal, hit_albedo, hit_specularMap, sunDir, moonDir, hitDistance);
+            indirect = sampleBounce(globalPos, hit_localPos, hit_localNormal, hit_albedo, hit_specularMap, sunDir, moonDir, hitDistance);
         }
 
         diffuse.rgb += indirect * transmitColor;
@@ -160,7 +160,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     texDiffuse_write[globalPos] = diffuse;
 }
 
-float3 sampleBounce(float3 localPos, float3 localNormal, float3 albedo, half4 specularMap, float3 sunDir, float3 moonDir, float hitDistance) {
+float3 sampleBounce(uint2 globalPos, float3 localPos, float3 localNormal, float3 albedo, half4 specularMap, float3 sunDir, float3 moonDir, float hitDistance) {
     // hitDistance = distance(localPos, hit_localPos);
 
     float3 skyPos = planet.getSkyPosition(localPos);
@@ -178,6 +178,9 @@ float3 sampleBounce(float3 localPos, float3 localNormal, float3 albedo, half4 sp
 
     float3 hit_diffuse = (sunLight + moonLight) / PI;
     hit_diffuse *= SampleShadow(localPos, localNormal);
+
+    // sample random light from local list
+    hit_diffuse += sampleRandomVoxelLight(globalPos, localPos, localNormal, localNormal);
 
     // let size = surface.albedo().getSize();
     // let cone2 = cone.Propagate(distance(localPos, hit_localPos));

@@ -65,8 +65,10 @@ float3 sampleVoxelLight(const in VoxelLight light, const in float3 localPos, con
     float3 lightColor = getColorSpace().fromGamma(color_range.rgb) * (color_range.a/16.0h) * BlockEmission;
 
     float lightF = (1.0/PI) * max(dot(tex_normal, -lightDir), 0.0);
-    // lightF *= Attenuation::getExponential(lightDist);
-    lightF *= Attenuation::getLinear(lightDist, color_range.a);
+    float att = Attenuation::getExponential(lightDist);
+    float attL = max(1.0 - lightDist / color_range.a, 0.0);
+    lightF *= min(att, pow3(attL));
+    // lightF *= Attenuation::getLinear(lightDist, color_range.a);
 
     return lightColor * lightShadow * lightF;
 }

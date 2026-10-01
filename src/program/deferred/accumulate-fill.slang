@@ -127,11 +127,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float confidence;
             float3 worldPos = localPos + ap.camera.position;
-            float3 cachedRadiance = sharcLookup(worldPos, geo_normal, confidence);
-            // Keep a traced-lighting baseline while resolved SHARC history converges.
-            float cacheWeight = confidence;// * 0.75;
-            diffuse = lerp(diffuse, cachedRadiance, cacheWeight);
-            // diffuseCounter = 1;// int(confidence * 7.0) + 1;
+            diffuse = sharcLookup(worldPos, geo_normal, confidence);
+            // // Keep a traced-lighting baseline while resolved SHARC history converges.
+            // float cacheWeight = confidence;// * 0.75;
+            // diffuse = lerp(diffuse, cachedRadiance, cacheWeight);
+            // // diffuseCounter = 1;// int(confidence * 7.0) + 1;
+
+            // TODO: this is wrong but looks better
+            diffuse /= PI;
         }
     }
 
