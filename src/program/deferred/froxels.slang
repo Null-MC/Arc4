@@ -11,6 +11,7 @@ import lib.noise.blue;
 import lib.froxel;
 import lib.shadow;
 import lib.hemisphere;
+import lib.light.sampling;
 
 
 extern static const int Froxel_MaxFrames = 15;
@@ -112,19 +113,13 @@ void main(ComputeInput input) {
         float altitude_KM = planet.getSkyAltitude(traceSkyPos);
         sky.Sample(altitude_KM, skySample);
 
-        float3 sampleTransmittance = exp(-max(stepDist * skySample.extinction, 0.0));
-
-        // Integrate within each segment.
-        // float3 scatteringNoPhase = skySample.rayleighScattering + skySample.mieScattering;
-        // float3 scatteringF = (scatteringNoPhase - scatteringNoPhase * sampleTransmittance) / skySample.extinction;
-        // lumFactor += transmittance * scatteringF;
-
         float3 sunLight = planet.sampleTransmit(traceSkyPos, sunDir) * SunColor;
         float3 moonLight = planet.sampleTransmit(traceSkyPos, moonDir) * MoonColor;
 
         float3 inScattering = skySample.mieScattering * (miePhase_sun * sunLight + miePhase_moon * moonLight) + Sky_MinLight;
 
         // Integrated scattering within path segment.
+        float3 sampleTransmittance = exp(-max(stepDist * skySample.extinction, 0.0));
         float3 scatteringIntegral = (inScattering * saturate(1.0 - sampleTransmittance)) / max(skySample.extinction, 1e-3);
 
         scattering += scatteringIntegral * transmittance;
@@ -175,8 +170,10 @@ void main(ComputeInput input) {
     inScatterFinal += indirect;
 
 
-    // TODO: random block light sample
-
+    // sample random light from local list
+    float3 blockLight = sampleRandomFogLight(input.globalPos.xy, localPos);
+    // TODO: implement phase, scatter, transmit
+    inScatterFinal += blockLight;
 
 
     // project last frame position and accumulate

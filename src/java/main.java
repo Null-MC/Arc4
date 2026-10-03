@@ -58,7 +58,7 @@ public class main implements ShaderPack {
         }
 
         if (settings.getBoolValue("Froxels_Enabled")) {
-            froxels = new Froxels(screen, pipeline);
+            froxels = new Froxels(screen, pipeline, builder);
 
             builder
                 .exportInt("Froxel_Width", froxels.BufferWidth)
@@ -80,6 +80,7 @@ public class main implements ShaderPack {
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);
+            sky.renderGroundTransmit(stage);
             sky.renderMultiScatter(stage);
             sky.renderView(stage);
 
@@ -228,7 +229,7 @@ public class main implements ShaderPack {
             mainFlipper.flip();
 
             if (settings.getBoolValue("Volumetric_Enabled")) {
-                if (froxels != null) froxels.render(stage);
+                if (froxels != null) froxels.render(stage, builder);
                 
                 builder.compute(stage, "Volumetric", "program/deferred/volumetric", shader -> {
                     shader.override("texMain_read", mainFlipper.getReader());

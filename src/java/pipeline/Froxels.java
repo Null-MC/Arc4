@@ -10,6 +10,7 @@ import dev.irisshaders.aperture.api.objects.TextureReference3D;
 import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
 
 import lib.Flipper;
+import lib.Shader.ShaderBuilder;
 
 public class Froxels {
     private final Flipper<Texture3D> flipper;
@@ -21,7 +22,7 @@ public class Froxels {
     public int BufferDepth;
 
     
-    public Froxels(Screen screen, PipelineConfig pipeline) {
+    public Froxels(Screen screen, PipelineConfig pipeline, ShaderBuilder builder) {
         BufferWidth = (int)Math.ceil(screen.renderWidth() / 8f);
         BufferHeight = (int)Math.ceil(screen.renderHeight() / 8f);
         BufferDepth = 64;
@@ -52,18 +53,20 @@ public class Froxels {
             .minFilter(FilterMode.LINEAR)
             .magFilter(FilterMode.LINEAR)
             .create();
+
+        builder
+            .exportInt("Froxel_Width", this.BufferWidth)
+            .exportInt("Froxel_Height", this.BufferHeight)
+            .exportInt("Froxel_Depth", this.BufferDepth);
     }
 
-    public void render(StageList stage) {
+    public void render(StageList stage, ShaderBuilder builder) {
         int sizeX = (int)Math.ceil(BufferWidth / 8f);
         int sizeY = (int)Math.ceil(BufferHeight / 8f);
         int sizeZ = (int)Math.ceil(BufferDepth / 4f);
 
-        stage.compute("froxels", "program/deferred/froxels", "main")
-            .exportInt("Froxel_Width", this.BufferWidth)
-            .exportInt("Froxel_Height", this.BufferHeight)
-            .exportInt("Froxel_Depth", this.BufferDepth)
-            .dispatch3D(sizeX, sizeY, sizeZ);
+        builder.compute(stage, "froxels", "program/deferred/froxels", shader -> shader
+            .dispatch3D(sizeX, sizeY, sizeZ));
     }
 
     public void update() {
