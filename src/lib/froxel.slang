@@ -16,7 +16,7 @@ static const uint3 Froxel_Resolution = uint3(Froxel_Width, Froxel_Height, Froxel
 float3 Froxel_GetNdcPosition(const in float3 bufferPos) {
     float3 ndcPos = bufferPos / Froxel_Resolution;
 
-    ndcPos.z = pow5(ndcPos.z);
+    ndcPos.z = pow4(ndcPos.z);
     
     // ndcPos.z = delinearizeDepth(ndcPos.z * Froxel_MaxDist, ap.camera.near, ap.camera.far);
 
@@ -30,7 +30,7 @@ float3 Froxel_GetBufferPosition(in float3 ndcPos) {
 
     ndcPos.xy = ndcPos.xy * 0.5 + 0.5;
 
-    ndcPos.z = pow(ndcPos.z, (1.0/5.0));
+    ndcPos.z = pow(ndcPos.z, (1.0/4.0));
 
     return ndcPos * Froxel_Resolution;
 }

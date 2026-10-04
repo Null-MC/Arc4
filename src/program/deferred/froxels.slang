@@ -38,16 +38,20 @@ void main(ComputeInput input) {
 	if (any(input.globalPos >= Froxel_Resolution)) return;
 
     float3 seed = input.globalPos + float3(3,9,13)*ap.timing.frameCounter;
-    float3 bufferPos = input.globalPos + hash33(seed);
+    float3 bufferPos = input.globalPos + 0.5;// + hash33(seed);
 
     float3 ndcPos = Froxel_GetNdcPosition(bufferPos);
 
-    // float depth = ap.depth.sampleNearest(ndcPos.xy * 0.5 + 0.5);
-    // if (depth > 0.0) {
-    //     ndcPos.z = ap.camera.near / ndcPos.z;
-    //     ndcPos.z = max(ndcPos.z, depth + 0.2);
-    //     ndcPos.z = ap.camera.near / ndcPos.z;
-    // }
+    float depth = ap.depth.sampleNearest(ndcPos.xy * 0.5 + 0.5);
+    
+    if (depth > 0.0) {
+        ndcPos.z = ap.camera.near / ndcPos.z;
+
+        float depthL = ap.camera.near / depth;
+        ndcPos.z = min(ndcPos.z, depthL - 0.2);
+
+        ndcPos.z = ap.camera.near / ndcPos.z;
+    }
 
     float3 viewPos = mul_project(ap.camera.projectionInv, ndcPos);
     float3 localPos = mul3(ap.camera.viewInv, viewPos);

@@ -5,11 +5,11 @@ import dev.irisshaders.aperture.api.pipeline.PipelineConfig;
 import lib.Shader.ShaderBuilder;
 
 public class LightList {
-    public static final int SectionSizeX = 9;
-    public static final int SectionSizeY = 7;
-    public static final int SectionSizeZ = 9;
+    public static final int SectionSizeX = 13;
+    public static final int SectionSizeY = 9;
+    public static final int SectionSizeZ = 13;
 
-    public static final int GlobalMaxLightCount = 16384;
+    public static final int GlobalMaxLightCount = 32768;
     public static final int LocalMaxLightCount = 1048576;
 
     public static final int MaxIndexCount = SectionSizeX * SectionSizeY * SectionSizeZ;

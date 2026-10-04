@@ -19,6 +19,11 @@ public class blocks {
             .setLightColor(color_Fire)
             .setLightRange(15));
 
+        builder.mapBlock("BLOCK_COPPER_TORCH", b -> b
+            .matches(new String[]{"copper_torch", "copper_wall_torch"})
+            .setLightColor("#72af2c")
+            .setLightRange(14));
+
         builder.mapBlock("BLOCK_FIRE", b -> b
             .matches("fire")
             .setLightColor(color_Fire)

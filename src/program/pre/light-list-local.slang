@@ -1,13 +1,14 @@
 import aperture;
 import lib.common;
+import lib.noise.blue;
 import lib.light.data;
 import lib.light.list;
 
 
 static const int GroupSize = 8*4*8;
 
-groupshared Atomic<uint> shared_counter;
 groupshared VoxelLight shared_lights[MaxLocalLightCount];
+groupshared uint shared_count;
 groupshared uint global_start;
 
 struct ComputeInput {
@@ -24,105 +25,84 @@ void main(ComputeInput input) {
     int map_index = GlobalLights.GetMapIndex(input.groupPos);
     if (map_index < 0 || map_index >= LightList_MaxIndexCount) return;
 
-    // Intialize shared counter
     if (input.localIndex == 0u) {
-        shared_counter.store(0u);
+        buildLocalReservoir(input.groupPos);
+        global_start = LightListCounters[0].local.add(min(shared_count, MaxLocalLightCount));
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    // Sample neighbor bins for lights
+    uint stored_count = min(shared_count, MaxLocalLightCount);
+    LocalLightMap[map_index] = VoxelLightRange(global_start, shared_count);
+    copyReservoirToLocalList(input.localIndex, stored_count);
+}
+
+void buildLocalReservoir(const in uint3 groupPos) {
+    uint candidate_count = 0u;
+    int map_index = GlobalLights.GetMapIndex(groupPos);
+    var global_range = GlobalLightMap[map_index];
+
+    for (uint i = 0u; i < uint(global_range.count); i++) {
+        addToReservoir(GlobalLightIndex[global_range.start + i], candidate_count, groupPos);
+    }
+
     int3 worldOffset = int3(floor(ap.camera.position / 8.0)) - LightList_SectionSize/2;
     SectionBounds sectionBounds;
 
     for (int z = 0; z < NEIGHBOR_OFFSETS.getCount(); z++) {
-        // if (shared_counter.load() >= MaxLocalLightCount) break;
-
-        int3 neighbor_pos = input.groupPos + NEIGHBOR_OFFSETS[z];
+        int3 neighbor_pos = groupPos + NEIGHBOR_OFFSETS[z];
         int neighbor_map_index = GlobalLights.GetMapIndex(neighbor_pos);
         if (neighbor_map_index < 0) continue;
 
         var neighbor_range = GlobalLightMap[neighbor_map_index];
 
-        int stride = int(ceil(neighbor_range.count / float(GroupSize)));
+        for (uint i = 0u; i < uint(neighbor_range.count); i++) {
+            var light = GlobalLightIndex[neighbor_range.start + i];
+            float lightRange = getLightColorRange(ap.blocks[light.blockId]).a;
 
-        for (int i = 0; i < stride; i++) {
-            int i_local = input.localIndex * stride + i;
-            if (i_local >= neighbor_range.count) break;
-
-            // Copy neighbor lights to shared_lights
-            var light = GlobalLightIndex[neighbor_range.start + i_local];
-            var block = ap.blocks[light.blockId];
-
-            int blockId = block.customId;
-            float lightRange = getLightColorRange(block).a;
-
-            // test if light actually reaches this bin!
             sectionBounds.worldMin = (worldOffset + neighbor_pos) * 8;
             sectionBounds.worldMax = sectionBounds.worldMin + 8;
 
             if (!sectionBounds.intersectsSphere(light.voxelPos + 0.5, lightRange)) continue;
-
-            uint i_shared = shared_counter.increment();
-
-            if (i_shared < MaxLocalLightCount)
-                shared_lights[i_shared] = light;
+            addToReservoir(light, candidate_count, groupPos);
         }
     }
 
-    GroupMemoryBarrierWithGroupSync();
-
-    // Populate shared global index
-    var global_range = GlobalLightMap[map_index];
-
-    uint local_count = shared_counter.load();
-
-    uint store_count = min(local_count + global_range.count, MaxLocalLightCount);
-    store_count = max(store_count - global_range.count, 0);
-
-    if (input.localIndex == 0u) {
-        global_start = LightListCounters[0].local.add(store_count);
-    }
-
-    GroupMemoryBarrierWithGroupSync();
-
-    // Create local light list mapping
-    LocalLightMap[map_index] = VoxelLightRange(global_start, local_count);
-
-    if (store_count == 0) return;
-
-    // Copy lights from global list to local list
-    copyGlobalToLocalList(input.localIndex, global_range);
-
-    // Copy new local lights to local light list
-    if (store_count <= 0) return;
-
-    copyLocalToLocalList(input.localIndex, store_count, global_range.count);
+    shared_count = candidate_count;
 }
 
-void copyGlobalToLocalList(const in uint localIndex, const in VoxelLightRange global_range) {
-    int stride = int(ceil(global_range.count / float(GroupSize)));
+void addToReservoir(const in VoxelLight light, inout uint candidateCount, const in uint3 groupPos) {
+    uint candidateIndex = candidateCount++;
+    if (candidateIndex < MaxLocalLightCount) {
+        shared_lights[candidateIndex] = light;
+        return;
+    }
 
-    for (uint i = 0; i < stride; i++) {
-        uint i_local = localIndex * stride + i;
-        if (i_local >= global_range.count) break;
-
-        // TODO: further validate in/out index is not OOB?
-
-        LocalLightIndex[global_start + i_local] = GlobalLightIndex[global_range.start + i_local];
+    uint slot = randomReservoirSlot(candidateIndex, groupPos);
+    if (slot < MaxLocalLightCount) {
+        shared_lights[slot] = light;
     }
 }
 
-void copyLocalToLocalList(const in uint localIndex, const in uint local_count, const in uint global_count) {
-    int stride = int(ceil(local_count / float(GroupSize)));
+uint randomReservoirSlot(const in uint candidateIndex, const in uint3 groupPos) {
+    uint bound = candidateIndex + 1u;
+    uint threshold = -bound % bound;
+
+    for (uint salt = 0u; ; salt++) {
+        uint random = BlueNoise::hash31(groupPos ^ uint3(candidateIndex, salt, candidateIndex + salt));
+        if (random >= threshold) return random % bound;
+    }
+}
+
+void copyReservoirToLocalList(const in uint localIndex, const in uint storedCount) {
+    int stride = int(ceil(storedCount / float(GroupSize)));
 
     for (int i = 0; i < stride; i++) {
         uint i_local = localIndex * stride + i;
-        if (i_local >= local_count) break;
+        if (i_local >= storedCount) break;
 
-        uint i_global = global_start + global_count + i_local;
-        if (i_global >= LightList_GlobalMaxLightCount) break;
-
+        uint i_global = global_start + i_local;
+        if (i_global >= LightList_LocalMaxLightCount) break;
         LocalLightIndex[i_global] = shared_lights[i_local];
     }
 }

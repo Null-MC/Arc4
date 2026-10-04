@@ -64,6 +64,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         diffuse.rgb = directLight * SampleShadowDisc(globalPos, localPos, geo_normal);
 
+        diffuse.rgb += sampleRandomVoxelLight(globalPos, localPos, geo_normal, tex_normal);
+
+
         half4 specularMap = texDeferSpecular[globalPos];
         float sss = getSpecularReader().sss(specularMap);
 
@@ -141,7 +144,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
                 hitDiffuse *= SampleShadow(hit_localPos, hit_localNormal);
 
-                hitDiffuse += sampleRandomVoxelLight(globalPos.xy, localPos, geo_normal, tex_normal);
+                hitDiffuse += sampleRandomVoxelLight(globalPos, hit_localPos, hit_localNormal, hit_localNormal);
 
                 float confidence;
                 float3 hitWorldPos = hit_localPos + ap.camera.position;
