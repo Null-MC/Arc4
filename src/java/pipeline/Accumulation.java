@@ -7,6 +7,7 @@ import lib.PingPongBufferBuilder2D;
 
 public class Accumulation {
     private final PingPongBuffer2D diffuseHistory;
+    private final PingPongBuffer2D diffuseFastHistory;
     private final PingPongBuffer2D diffuseCounter;
     private final PingPongBuffer2D specularHistory;
     private final PingPongBuffer2D specularCounter;
@@ -16,6 +17,10 @@ public class Accumulation {
 
     public Accumulation(PipelineConfig pipeline) {
         diffuseHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseHistory", TextureFormat.RGBA16_SFLOAT)
+            .renderSize()
+            .createEmpty();
+
+        diffuseFastHistory = new PingPongBufferBuilder2D(pipeline, "texDiffuseFastHistory", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
             .createEmpty();
         
@@ -42,6 +47,7 @@ public class Accumulation {
 
     public void update() {
         diffuseHistory.flip();
+        diffuseFastHistory.flip();
         diffuseCounter.flip();
         specularHistory.flip();
         specularCounter.flip();

@@ -10,11 +10,15 @@ static const int MAX_HISTORY = 40;
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float3> texDiffuse_write;
 
+[[vk::image_format("rgba16f")]]
+RWTexture2D<float3> texDiffuseFast_write;
+
 [[vk::image_format("r8ui")]]
 RWTexture2D<uint> texDiffuseCounter_write;
 
 Texture2D<float4> texDiffuse_read;
 Texture2D<float4> texDiffuseHistory_read;
+Texture2D<float4> texDiffuseFastHistory_read;
 Texture2D<uint> texDiffuseCounter_read;
 Texture2D<float2> texNormalHistory_read;
 Texture2D<float> texDepthHistory_read;
@@ -29,6 +33,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 diffuse_now = texDiffuse_read[globalPos].rgb;
     float3 diffuse_final;
+    float3 diffuse_fast;
     uint historyCounter;
     
     if (ap.timing.frameCounter > 0) {
@@ -85,22 +90,64 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         // temporal blending
         historyCounter = clamp(historyCounter, 0, MAX_HISTORY);
 
-        // TODO: replace with manually weighted linear sampling
-        // float3 diffuse_last = texDiffuseHistory_read.Sample(apt_linearSampler, texcoordLast).rgb;
-        float3 diffuse_last = SampleHistoryValid(texcoordLast, tex_normal_now);
+        float3 diffuse_last;
+        float3 diffuse_fast_last;
+        SampleHistoryValid(texcoordLast, tex_normal_now, diffuse_last, diffuse_fast_last);
 
-        diffuse_final = lerp(diffuse_last, diffuse_now, rcp(historyCounter + 1.0));
+        if (historyCounter == 0) {
+            diffuse_final = diffuse_now;
+            diffuse_fast = diffuse_now;
+        }
+        else if (userSettings.Lighting_FastClamp) {
+            diffuse_fast = lerp(
+                diffuse_fast_last,
+                diffuse_now,
+                rcp(min(historyCounter, uint(userSettings.Lighting_FastClampFrames)) + 1.0));
+
+            diffuse_final = lerp(diffuse_last, diffuse_now, rcp(historyCounter + 1.0));
+            float3 neighborhoodMin;
+            float3 neighborhoodMax;
+            CalculateFastHistoryBounds(globalPos, diffuse_fast, neighborhoodMin, neighborhoodMax);
+            diffuse_final = clamp(diffuse_final, neighborhoodMin, neighborhoodMax);
+        }
+        else {
+            diffuse_final = lerp(diffuse_last, diffuse_now, rcp(historyCounter + 1.0));
+            diffuse_fast = diffuse_final;
+        }
     }
     else {
         diffuse_final = diffuse_now;
+        diffuse_fast = diffuse_now;
         historyCounter = 0;
     }
 
     texDiffuse_write[globalPos] = diffuse_final;
+    texDiffuseFast_write[globalPos] = diffuse_fast;
     texDiffuseCounter_write[globalPos] = historyCounter;
 }
 
-float3 SampleHistoryValid(float2 texcoordLast, float3 geo_normal) {
+void CalculateFastHistoryBounds(int2 position, float3 center, out float3 minimum, out float3 maximum) {
+    float3 firstMoment = 0.0;
+    float3 secondMoment = 0.0;
+
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
+            int2 samplePosition = clamp(position + int2(x, y), 0, ap.game.renderSize - 1);
+            float3 sampleValue = texDiffuseFastHistory_read[samplePosition].rgb;
+            firstMoment += sampleValue;
+            secondMoment += sampleValue * sampleValue;
+        }
+    }
+
+    float3 mean = firstMoment * rcp(25.0);
+    float3 sigma = sqrt(max(secondMoment * rcp(25.0) - mean * mean, 0.0));
+    float3 radius = userSettings.Lighting_FastClampSigma * sigma;
+
+    minimum = min(mean - radius, center);
+    maximum = max(mean + radius, center);
+}
+
+void SampleHistoryValid(float2 texcoordLast, float3 geo_normal, out float3 diffuseHistory, out float3 fastHistory) {
     // Convert to unnormalized texture coordinates in the history buffer
     float2 uvSize = float2(ap.game.renderSize);
     float2 texelPos = texcoordLast * uvSize - 0.5;
@@ -124,6 +171,11 @@ float3 SampleHistoryValid(float2 texcoordLast, float3 geo_normal) {
     float3 c01 = texDiffuseHistory_read[p01].rgb;
     float3 c11 = texDiffuseHistory_read[p11].rgb;
 
+    float3 f00 = texDiffuseFastHistory_read[p00].rgb;
+    float3 f10 = texDiffuseFastHistory_read[p10].rgb;
+    float3 f01 = texDiffuseFastHistory_read[p01].rgb;
+    float3 f11 = texDiffuseFastHistory_read[p11].rgb;
+
     float3 n00 = octohedral::decode(texNormalHistory_read[p00]);
     float3 n10 = octohedral::decode(texNormalHistory_read[p10]);
     float3 n01 = octohedral::decode(texNormalHistory_read[p01]);
@@ -144,10 +196,11 @@ float3 SampleHistoryValid(float2 texcoordLast, float3 geo_normal) {
 
     // If at least one pixel in the bilinear footprint is valid, re-normalize weights
     if (sumWeights > 0.001) {
-        return (c00 * w00 + c10 * w10 + c01 * w01 + c11 * w11) / sumWeights;
+        diffuseHistory = (c00 * w00 + c10 * w10 + c01 * w01 + c11 * w11) / sumWeights;
+        fastHistory = (f00 * w00 + f10 * w10 + f01 * w01 + f11 * w11) / sumWeights;
+        return;
     }
     
-    // Fallback: If the whole footprint is invalid (complete disocclusion), 
-    // return the nearest neighbor tap or a value that will trigger color clipping later
-    return c00; 
+    diffuseHistory = c00;
+    fastHistory = f00;
 }

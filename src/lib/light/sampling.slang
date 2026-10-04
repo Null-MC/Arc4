@@ -15,13 +15,14 @@ float3 sampleRandomVoxelLight(uint2 fragPos, float3 localPos, float3 geo_normal,
     if (sectionIndex < 0) return 0.0;
 
     VoxelLightRange range = LocalLightMap[sectionIndex];
-    uint bin_count = clamp(range.count, 0u, MaxLocalLightCount);
+    uint bin_count = max(range.count, 0u);
+    uint sample_count = min(bin_count, MaxLocalLightCount);
 
     // Pick one random light and sample
     float r = BlueNoise::sampleAnimated1D(fragPos, 0, ap.timing.frameCounter);
     uint i = uint(r * bin_count);
 
-    if (bin_count <= 0 || i >= MaxLocalLightCount) return 0.0;
+    if (bin_count <= 0 || i >= sample_count) return 0.0;
 
     VoxelLight light = LocalLightIndex[range.start + i];
     return sampleVoxelLight(light, localPos, geo_normal, tex_normal) * bin_count;
@@ -33,13 +34,14 @@ float3 sampleRandomFogLight(uint2 fragPos, float3 localPos) {
     if (sectionIndex < 0) return 0.0;
 
     VoxelLightRange range = LocalLightMap[sectionIndex];
-    uint bin_count = clamp(range.count, 0u, MaxLocalLightCount);
+    uint bin_count = max(range.count, 0u);
+    uint sample_count = min(bin_count, MaxLocalLightCount);
 
     // Pick one random light and sample
     float r = BlueNoise::sampleAnimated1D(fragPos, 0, ap.timing.frameCounter);
     uint i = uint(r * bin_count);
 
-    if (bin_count <= 0 || i >= MaxLocalLightCount) return 0.0;
+    if (bin_count <= 0 || i >= sample_count) return 0.0;
 
     VoxelLight light = LocalLightIndex[range.start + i];
     return sampleFogLight(light, localPos) * bin_count;

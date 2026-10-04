@@ -32,6 +32,7 @@ public class main implements ShaderPack {
     private Resources resources;
     private Flipper<Texture2D> mainFlipper;
     private Flipper<Texture2D> diffuseFlipper;
+    private Flipper<Texture2D> diffuseFastFlipper;
     private Flipper<Texture2D> specularFlipper;
 
     private ShaderBuilder builder;
@@ -48,6 +49,7 @@ public class main implements ShaderPack {
         specularFlipper = new Flipper<Texture2D>(resources.texSpecular_A, resources.texSpecular_B);
         mainFlipper = new Flipper<Texture2D>(resources.mainTexture_A, resources.mainTexture_B);
         diffuseFlipper = new Flipper<Texture2D>(resources.texDiffuse_A, resources.texDiffuse_B);
+        diffuseFastFlipper = new Flipper<Texture2D>(resources.texDiffuseFast_A, resources.texDiffuseFast_B);
 
         sky = new HillaireSky(pipeline);
         exposure = new Exposure(screen, pipeline);
@@ -80,7 +82,6 @@ public class main implements ShaderPack {
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
             sky.renderTransmit(stage);
-            sky.renderGroundTransmit(stage);
             sky.renderMultiScatter(stage);
             sky.renderView(stage);
 
@@ -163,10 +164,12 @@ public class main implements ShaderPack {
                 builder.compute(stage, "Deferred-Accumulate-Diffuse", "program/deferred/accumulate-diffuse", shader -> {
                     shader.override("texDiffuse_read", diffuseFlipper.getReader());
                     shader.override("texDiffuse_write", diffuseFlipper.getWriter());
+                    shader.override("texDiffuseFast_write", diffuseFastFlipper.getWriter());
                     shader.dispatchRenderSize(16, 16);
                 });
 
                 diffuseFlipper.flip();
+                diffuseFastFlipper.flip();
 
                 builder.compute(stage, "Deferred-Accumulate-Specular", "program/deferred/accumulate-specular", shader -> {
                     shader.override("texSpecular_read", specularFlipper.getReader());
@@ -179,6 +182,7 @@ public class main implements ShaderPack {
                 builder.compute(stage, "Deferred-Accumulate-Fill", "program/deferred/accumulate-fill", shader -> {
                     shader.override("texDiffuse_read", diffuseFlipper.getReader());
                     shader.override("texDiffuse_write", diffuseFlipper.getWriter());
+                    shader.override("texDiffuseFast_read", diffuseFastFlipper.getReader());
                     shader.override("texSpecular_read", specularFlipper.getReader());
                     shader.override("texSpecular_write", specularFlipper.getWriter());
                     shader.dispatchRenderSize(16, 16);

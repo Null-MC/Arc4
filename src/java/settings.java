@@ -32,6 +32,9 @@ public class settings implements PackSettings {
             screen_lighting.option("SpecularEnabled", OptionType.boolType(true), false);
             screen_lighting.option("Lighting_Accumulate", OptionType.boolType(true), false);
             screen_lighting.option("Lighting_BlurLevel", OptionType.intType(0, 5, 1, 3), false);
+            screen_lighting.option("Lighting_FastClamp", OptionType.boolType(true), false);
+            screen_lighting.option("Lighting_FastClampSigma", OptionType.floatType(0.0f, 5.0f, 0.1f, 2.0f), false);
+            screen_lighting.option("Lighting_FastClampFrames", OptionType.intType(1, 16, 1, 5), false);
 
             subscreen(screen_lighting, "Sharc", screen_sharc -> {
                 screen_sharc.option("Sharc_Enabled", OptionType.boolType(true), false);

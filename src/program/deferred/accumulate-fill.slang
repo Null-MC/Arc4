@@ -12,6 +12,9 @@ RWTexture2D<float3> texDiffuse_write;
 [[vk::image_format("rgba16f")]]
 RWTexture2D<float3> texDiffuseHistory_write;
 
+[[vk::image_format("rgba16f")]]
+RWTexture2D<float3> texDiffuseFastHistory_write;
+
 [[vk::image_format("r8ui")]]
 RWTexture2D<uint> texDiffuseCounter_write;
 
@@ -31,6 +34,7 @@ RWTexture2D<float2> texNormalHistory_write;
 RWTexture2D<float> texDepthHistory_write;
 
 Texture2D<float4> texDiffuse_read;
+Texture2D<float4> texDiffuseFast_read;
 Texture2D<float4> texSpecular_read;
 
 Texture2D<half4> texDeferNormal;
@@ -113,6 +117,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
     }
 
     float3 diffuse = texDiffuse_read[uv_diffuse].rgb;
+    float3 diffuseFast = texDiffuseFast_read[uv_diffuse].rgb;
     float3 specular = texSpecular_read[uv_specular].rgb;
 
     if (diffuseCounter == 0) {
@@ -136,6 +141,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             // TODO: this is wrong but looks better
             diffuse /= PI;
         }
+
+        diffuseFast = diffuse;
     }
 
     diffuseCounter++;
@@ -143,6 +150,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     texDiffuse_write[globalPos] = diffuse;
     texDiffuseHistory_write[globalPos] = diffuse;
+    texDiffuseFastHistory_write[globalPos] = diffuseFast;
     texDiffuseCounter_write[globalPos] = diffuseCounter;
 
     texSpecular_write[globalPos] = specular;

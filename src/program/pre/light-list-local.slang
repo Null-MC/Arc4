@@ -36,7 +36,7 @@ void main(ComputeInput input) {
     SectionBounds sectionBounds;
 
     for (int z = 0; z < NEIGHBOR_OFFSETS.getCount(); z++) {
-        if (shared_counter.load() >= MaxLocalLightCount) break;
+        // if (shared_counter.load() >= MaxLocalLightCount) break;
 
         int3 neighbor_pos = input.groupPos + NEIGHBOR_OFFSETS[z];
         int neighbor_map_index = GlobalLights.GetMapIndex(neighbor_pos);
@@ -64,9 +64,9 @@ void main(ComputeInput input) {
             if (!sectionBounds.intersectsSphere(light.voxelPos + 0.5, lightRange)) continue;
 
             uint i_shared = shared_counter.increment();
-            if (i_shared >= MaxLocalLightCount) break;
 
-            shared_lights[i_shared] = light;
+            if (i_shared < MaxLocalLightCount)
+                shared_lights[i_shared] = light;
         }
     }
 
@@ -76,27 +76,28 @@ void main(ComputeInput input) {
     var global_range = GlobalLightMap[map_index];
 
     uint local_count = shared_counter.load();
-    uint total_count = min(local_count + global_range.count, MaxLocalLightCount);
-    local_count = max(total_count - global_range.count, 0);
+
+    uint store_count = min(local_count + global_range.count, MaxLocalLightCount);
+    store_count = max(store_count - global_range.count, 0);
 
     if (input.localIndex == 0u) {
-        global_start = LightListCounters[0].local.add(total_count);
+        global_start = LightListCounters[0].local.add(store_count);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
     // Create local light list mapping
-    LocalLightMap[map_index] = VoxelLightRange(global_start, total_count);
+    LocalLightMap[map_index] = VoxelLightRange(global_start, local_count);
 
-    if (total_count == 0) return;
+    if (store_count == 0) return;
 
     // Copy lights from global list to local list
     copyGlobalToLocalList(input.localIndex, global_range);
 
     // Copy new local lights to local light list
-    if (local_count <= 0) return;
+    if (store_count <= 0) return;
 
-    copyLocalToLocalList(input.localIndex, local_count, global_range.count);
+    copyLocalToLocalList(input.localIndex, store_count, global_range.count);
 }
 
 void copyGlobalToLocalList(const in uint localIndex, const in VoxelLightRange global_range) {

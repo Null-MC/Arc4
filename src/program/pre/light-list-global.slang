@@ -55,26 +55,26 @@ void main(ComputeInput input) {
 
     // Populate shared global index
     uint count = shared_counter.load();
-    count = min(count, MaxLocalLightCount);
+    uint store_count = min(count, MaxLocalLightCount);
 
     if (input.localIndex == 0u) {
-        global_start = LightListCounters[0].global.add(count);
+        global_start = LightListCounters[0].global.add(store_count);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
     // avoid exceeding the global light list capacity
-    count = min(count, LightList_GlobalMaxLightCount - global_start);
-    count = max(count, 0);
+    store_count = min(store_count, LightList_GlobalMaxLightCount - global_start);
+    store_count = max(store_count, 0);
 
     // Copy shared lights to global light list
     GlobalLightMap[map_index] = VoxelLightRange(global_start, count);
-    if (count == 0) return;
+    if (store_count == 0) return;
 
     [ForceUnroll]
     for (int i = 0; i < 2; i++) {
         uint i_local = input.localIndex * 2 + i;
-        if (i_local >= count) break;
+        if (i_local >= store_count) break;
 
         uint i_global = global_start + i_local;
         if (i_global >= LightList_GlobalMaxLightCount) break;

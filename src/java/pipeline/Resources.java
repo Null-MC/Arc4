@@ -24,6 +24,8 @@ public class Resources {
 
     public final Texture2D texDiffuse_A;
     public final Texture2D texDiffuse_B;
+    public final Texture2D texDiffuseFast_A;
+    public final Texture2D texDiffuseFast_B;
     public final Texture2D texSpecular_A;
     public final Texture2D texSpecular_B;
 
@@ -73,6 +75,14 @@ public class Resources {
             .create();
 
         texDiffuse_B = pipeline.texture2D("texDiffuse_B", TextureFormat.RGBA16_SFLOAT)
+            .renderSize()
+            .create();
+
+        texDiffuseFast_A = pipeline.texture2D("texDiffuseFast_A", TextureFormat.RGBA16_SFLOAT)
+            .renderSize()
+            .create();
+
+        texDiffuseFast_B = pipeline.texture2D("texDiffuseFast_B", TextureFormat.RGBA16_SFLOAT)
             .renderSize()
             .create();
 
