@@ -64,6 +64,11 @@ public class blocks {
             .setLightColor("#9e7425")
             .setLightRange(3));
 
+        builder.mapBlock("BLOCK_REDSTONE_LAMP", b -> b
+            .matches("redstone_lamp")
+            .setLightColor("#eb9a64")
+            .setLightRange(14));
+
         builder.mapBlock("BLOCK_REDSTONE_TORCH", b -> b
             .matches(new String[]{"redstone_torch", "redstone_wall_torch"})
             .setLightColor("#ee390c")
@@ -104,7 +109,7 @@ public class blocks {
 
         builder.mapBlock("BLOCK_TORCH", b -> b
             .matches(new String[]{"torch", "wall_torch"})
-            .setLightColor("#ee940c")
+            .setLightColor("#df9036")
             .setLightRange(14));
     }
 }

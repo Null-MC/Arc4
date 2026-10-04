@@ -8,7 +8,8 @@ void main(uint index : SV_DispatchThreadID) {
 
     if (sharcHashEntries[index].key.x != SHARC_EMPTY_KEY &&
         sharcHashEntries[index].key.x != SHARC_TOMBSTONE_KEY &&
-        ap.timing.frameCounter - sharcHashEntries[index].normalFrame.w > SHARC_STALE_FRAME_MAX) {
+        ap.timing.frameCounter - sharcHashEntries[index].normalFrame.w > SHARC_STALE_FRAME_MAX)
+    {
         sharcHashEntries[index].key = uint2(SHARC_TOMBSTONE_KEY, SHARC_TOMBSTONE_KEY);
         sharcHashEntries[index].normalFrame = 0.0;
         sharcResolved[index].radiance = 0.0;

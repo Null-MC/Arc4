@@ -92,7 +92,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         float3 diffuse_last;
         float3 diffuse_fast_last;
-        SampleHistoryValid(texcoordLast, tex_normal_now, diffuse_last, diffuse_fast_last);
+        diffuse_last = texDiffuseHistory_read.Sample(apt_linearSampler, texcoordLast).rgb;
+        diffuse_fast_last = texDiffuseFastHistory_read.Sample(apt_linearSampler, texcoordLast).rgb;
+        // SampleHistoryValid(texcoordLast, tex_normal_now, diffuse_last, diffuse_fast_last);
 
         if (historyCounter == 0) {
             diffuse_final = diffuse_now;

@@ -64,8 +64,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         moonLight = getColorSpace().fromLinear(moonLight);
         moonLight *= max(dot(tex_normal, moonDir), 0.0);
 
-        diffuse.rgb = (sunLight + moonLight) / PI;
+        diffuse.rgb = sunLight + moonLight;
         diffuse.rgb *= SampleShadowDisc(globalPos, localPos, geo_normal);
+
+        // sample random light from local list
+        diffuse.rgb += sampleRandomVoxelLight(globalPos.xy, localPos, geo_normal, tex_normal);
+
+        diffuse.rgb /= PI;
+
 
         // sample index 2: index 0 is used by SampleShadowDisc, 1 by the SSS dither below.
         float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, 2, ap.timing.frameCounter);
@@ -82,10 +88,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         float3 rayBias = 0.002 * geo_normal;
 
-        if (is_sss) {
-            rayDir = -rayDir;
-            rayBias = -rayBias;
-        }
+        // if (is_sss) {
+        //     rayDir = -rayDir;
+        //     rayBias = -rayBias;
+        // }
 
         // float fWidth = asfloat(texDeferData[globalPos].g);
         // var cone = RayCone.CreateFromGBuffer(fWidth);
@@ -146,10 +152,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
 
         diffuse.rgb += indirect * transmitColor;
-
-
-        // sample random light from local list
-        diffuse.rgb += sampleRandomVoxelLight(globalPos.xy, localPos, geo_normal, tex_normal);
 
 
         // diffuse.a = ReBLUR::normalizeHitDistance(hitDistance, length(viewPos));

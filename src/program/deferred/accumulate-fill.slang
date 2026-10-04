@@ -124,23 +124,23 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         // diffuse = float3(1000,0,0);
         diffuse = 0.0;
 
-        if (userSettings.Sharc_Enabled) {
-            float2 texcoord = (globalPos + 0.5) / ap.game.renderSize;
-            float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
-            float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
-            float3 localPos = mul3(ap.camera.viewInv, viewPos);
+        // if (userSettings.Sharc_Enabled) {
+        //     float2 texcoord = (globalPos + 0.5) / ap.game.renderSize;
+        //     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
+        //     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
+        //     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
-            float confidence;
-            float3 worldPos = localPos + ap.camera.position;
-            diffuse = sharcLookup(worldPos, geo_normal, confidence);
-            // // Keep a traced-lighting baseline while resolved SHARC history converges.
-            // float cacheWeight = confidence;// * 0.75;
-            // diffuse = lerp(diffuse, cachedRadiance, cacheWeight);
-            // // diffuseCounter = 1;// int(confidence * 7.0) + 1;
+        //     float confidence;
+        //     float3 worldPos = localPos + ap.camera.position;
+        //     diffuse = sharcLookup(worldPos, geo_normal, confidence);
+        //     // // Keep a traced-lighting baseline while resolved SHARC history converges.
+        //     // float cacheWeight = confidence;// * 0.75;
+        //     // diffuse = lerp(diffuse, cachedRadiance, cacheWeight);
+        //     // // diffuseCounter = 1;// int(confidence * 7.0) + 1;
 
-            // TODO: this is wrong but looks better
-            diffuse /= PI;
-        }
+        //     // TODO: this is wrong but looks better
+        //     diffuse /= PI;
+        // }
 
         diffuseFast = diffuse;
     }

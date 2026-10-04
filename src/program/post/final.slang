@@ -14,7 +14,8 @@ import lib.light.list;
 
 
 extern static const bool DebugDefer = false;
-extern static const bool Debug_LightList = true;
+extern static const bool Debug_Lighting = false;
+extern static const bool Debug_LightList = false;
 
 Texture2D<float3> tex_read;
 
@@ -24,6 +25,7 @@ Texture2D<half3> texDeferColor;
 Texture2D<half4> texDeferNormal;
 Texture2D<half4> texDeferSpecular;
 Texture2D<half2> texDeferData;
+Texture2D<half3> texDiffuseHistory_write;
 
 
 [[shader("pixel")]]
@@ -66,6 +68,12 @@ float3 main(float2 fragPos: SV_Position) {
         }
         if (debugWindow(uv, int2(144, 144), int2(128, 128), texcoord)) {
             color = HillaireSky::sampleView(texcoord) * 0.008;
+        }
+    }
+
+    if (Debug_Lighting) {
+        if (debugWindow(uv, int2(8, 8), int2(320, 240), texcoord)) {
+            color = texDiffuseHistory_write.SampleLevel(apt_nearestSampler, texcoord, 0.0);
         }
     }
 
