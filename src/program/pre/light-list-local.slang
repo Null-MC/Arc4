@@ -8,7 +8,7 @@ import lib.light.list;
 static const int GroupSize = 8*4*8;
 
 groupshared VoxelLight shared_lights[MaxLocalLightCount];
-groupshared uint shared_count;
+groupshared Atomic<uint> shared_counter;
 groupshared uint global_start;
 
 struct ComputeInput {
@@ -26,53 +26,64 @@ void main(ComputeInput input) {
     if (map_index < 0 || map_index >= LightList_MaxIndexCount) return;
 
     if (input.localIndex == 0u) {
-        buildLocalReservoir(input.groupPos);
-        global_start = LightListCounters[0].local.add(min(shared_count, MaxLocalLightCount));
+        shared_counter.store(0u);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    uint stored_count = min(shared_count, MaxLocalLightCount);
-    LocalLightMap[map_index] = VoxelLightRange(global_start, shared_count);
+    buildLocalReservoir(input.localIndex, input.groupPos, map_index);
+
+    GroupMemoryBarrierWithGroupSync();
+
+    uint total_count = shared_counter.load();
+    uint stored_count = min(total_count, MaxLocalLightCount);
+
+    if (input.localIndex == 0u) {
+        global_start = LightListCounters[0].local.add(stored_count);
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    LocalLightMap[map_index] = VoxelLightRange(global_start, total_count);
     copyReservoirToLocalList(input.localIndex, stored_count);
 }
 
-void buildLocalReservoir(const in uint3 groupPos) {
-    uint candidate_count = 0u;
-    int map_index = GlobalLights.GetMapIndex(groupPos);
-    var global_range = GlobalLightMap[map_index];
-
-    for (uint i = 0u; i < uint(global_range.count); i++) {
-        addToReservoir(GlobalLightIndex[global_range.start + i], candidate_count, groupPos);
-    }
+// All threads cooperate: each bin's lights are strided across the group, and the
+// atomic counter hands out a unique candidate index to every accepted light.
+void buildLocalReservoir(const in uint localIndex, const in uint3 groupPos, const in int mapIndex) {
+    // Lights inside this bin always reach it
+    scanBin(localIndex, groupPos, GlobalLightMap[mapIndex], false, 0);
 
     int3 worldOffset = int3(floor(ap.camera.position / 8.0)) - LightList_SectionSize/2;
-    SectionBounds sectionBounds;
 
     for (int z = 0; z < NEIGHBOR_OFFSETS.getCount(); z++) {
         int3 neighbor_pos = groupPos + NEIGHBOR_OFFSETS[z];
         int neighbor_map_index = GlobalLights.GetMapIndex(neighbor_pos);
         if (neighbor_map_index < 0) continue;
 
-        var neighbor_range = GlobalLightMap[neighbor_map_index];
-
-        for (uint i = 0u; i < uint(neighbor_range.count); i++) {
-            var light = GlobalLightIndex[neighbor_range.start + i];
-            float lightRange = getLightColorRange(ap.blocks[light.blockId]).a;
-
-            sectionBounds.worldMin = (worldOffset + neighbor_pos) * 8;
-            sectionBounds.worldMax = sectionBounds.worldMin + 8;
-
-            if (!sectionBounds.intersectsSphere(light.voxelPos + 0.5, lightRange)) continue;
-            addToReservoir(light, candidate_count, groupPos);
-        }
+        scanBin(localIndex, groupPos, GlobalLightMap[neighbor_map_index], true, (worldOffset + neighbor_pos) * 8);
     }
-
-    shared_count = candidate_count;
 }
 
-void addToReservoir(const in VoxelLight light, inout uint candidateCount, const in uint3 groupPos) {
-    uint candidateIndex = candidateCount++;
+void scanBin(const in uint localIndex, const in uint3 groupPos, const in VoxelLightRange range, const in bool testReach, const in int3 binMin) {
+    SectionBounds sectionBounds;
+    sectionBounds.worldMin = binMin;
+    sectionBounds.worldMax = sectionBounds.worldMin + 8;
+
+    for (uint i = localIndex; i < uint(range.count); i += GroupSize) {
+        var light = GlobalLightIndex[range.start + i];
+
+        if (testReach) {
+            float lightRange = getLightColorRange(ap.blocks[light.blockId]).a;
+            if (!sectionBounds.intersectsSphere(light.voxelPos + 0.5, lightRange)) continue;
+        }
+
+        addToReservoir(light, groupPos);
+    }
+}
+
+void addToReservoir(const in VoxelLight light, const in uint3 groupPos) {
+    uint candidateIndex = shared_counter.increment();
     if (candidateIndex < MaxLocalLightCount) {
         shared_lights[candidateIndex] = light;
         return;
