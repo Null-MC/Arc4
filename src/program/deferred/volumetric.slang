@@ -101,7 +101,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             inScattering = texFroxel_write.Sample(froxelSampler, froxel_uv).rgb;
         }
         else {
-            float3 shadowF = SampleShadow(localPos_trace, 0.0);
+            float3 shadowF = SampleShadow(globalPos, localPos_trace, 0.0);
 
             float3 sunLight = getColorSpace().fromLinear(planet.sampleTransmit(skyPos_trace, sunDir) * SunColor);
             float3 moonLight = getColorSpace().fromLinear(planet.sampleTransmit(skyPos_trace, moonDir) * MoonColor);

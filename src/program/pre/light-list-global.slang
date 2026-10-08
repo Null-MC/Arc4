@@ -1,5 +1,6 @@
 import aperture;
 import lib.common;
+import lib.light.data;
 import lib.light.list;
 
 
@@ -41,13 +42,15 @@ void main(ComputeInput input) {
 
     int3 v1 = worldPos;
     var blockId1 = ap.voxel[v1];
-    if (ap.blocks[blockId1].emission > 0) {
+    var blockData1 = getLightColorRange(ap.blocks[blockId1]);
+    if (blockData1.a > 0) {
         insertLocalLight(v1, blockId1);
     }
     
     int3 v2 = worldPos + int3(0,1,0);
     var blockId2 = ap.voxel[v2];
-    if (ap.blocks[blockId2].emission > 0) {
+    var blockData2 = getLightColorRange(ap.blocks[blockId2]);
+    if (blockData2.a > 0) {
         insertLocalLight(v2, blockId2);
     }
 

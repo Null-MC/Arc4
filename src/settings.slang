@@ -23,6 +23,7 @@ struct PlanetBuffer {
     float RadiusGround_KM;
     float RadiusAtmosphere_KM;
     float SunAngularRadius;
+    float MoonAngularRadius;
 };
 
 
@@ -48,6 +49,7 @@ enum MaterialFormats {
 
 internal extern static const bool value_Bloom_Enabled;
 internal extern static const bool value_Debug_Exposure;
+internal extern static const bool value_Debug_LightCounters;
 internal extern static const bool value_Debug_SkyLuts;
 internal extern static const bool value_Froxels_Enabled;
 internal extern static const bool value_Lighting_Accumulate;
@@ -69,11 +71,14 @@ struct Settings {
     float Exposure_Max;
     float Exposure_Min;
     float Exposure_Offset;
+    float Planet_AtmosphereRadius;
+    float Planet_GroundRadius;
     float SeaLevel;
     float Sharc_BucketSize;
     float Sky_BarometricPressure;
     float Sky_FogIntensity;
     float Sky_Humidity;
+    float Sky_MoonRadius;
     float Sky_PollutionColor_B;
     float Sky_PollutionColor_G;
     float Sky_PollutionColor_R;
@@ -82,6 +87,7 @@ struct Settings {
     float SunAngle;
     static const bool Bloom_Enabled = value_Bloom_Enabled;
     static const bool Debug_Exposure = value_Debug_Exposure;
+    static const bool Debug_LightCounters = value_Debug_LightCounters;
     static const bool Debug_SkyLuts = value_Debug_SkyLuts;
     static const bool Froxels_Enabled = value_Froxels_Enabled;
     static const bool Lighting_Accumulate = value_Lighting_Accumulate;

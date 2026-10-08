@@ -42,7 +42,7 @@ extension PlanetBuffer {
         float cameraAltitude_KM = (ap.camera.position.y - userSettings.SeaLevel) * 0.001;
         skyPos_KM.y += cameraAltitude_KM + RadiusGround_KM;
 
-        skyPos_KM.y = max(skyPos_KM.y, RadiusGround_KM + 0.00002);
+        // skyPos_KM.y = max(skyPos_KM.y, RadiusGround_KM + 0.00002);
 
         return skyPos_KM;
     }

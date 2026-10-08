@@ -29,9 +29,9 @@ float2 waveDx(const in float2 position, const in float2 direction, const in floa
 float3 GetWaveHeight(const in float3 position, const in float skyLight, const in uint iterations) {
     float iter = 0.0;           // this will help generating well distributed wave directions
     float weight = 1.0;         // weight in final sum for the wave, this will change every iteration
-    float frequency = 0.25;      // frequency of the wave, this will change every iteration
-    float timeMultiplier = 2.5; // time multiplier for the wave, this will change every iteration
-    float sharpness = 2.0;
+    float frequency = 0.65;      // frequency of the wave, this will change every iteration
+    float timeMultiplier = 1.7; // time multiplier for the wave, this will change every iteration
+    float sharpness = 1.2;
 
     float DRAG_MULT = 0.04;
     float wavePhaseShift = length(position) * 0.1;
@@ -41,6 +41,8 @@ float3 GetWaveHeight(const in float3 position, const in float skyLight, const in
     float valueSum = 0.0;
 
     float time = getWaterTime();
+
+    time += 0.2 * texWaterNoiseB.Sample(samplerWater, position.xz * 0.05).r;
 
     for (uint i = 0; i < iterations; i++) {
         float iterMod = fmod(iter, PI * 2.0);
@@ -54,7 +56,7 @@ float3 GetWaveHeight(const in float3 position, const in float skyLight, const in
 
         iter += 1232.399963;
         timeMultiplier *= 1.07;
-        frequency *= 1.28;
+        frequency *= 1.15;
         weight *= 0.78;
         sharpness *= 1.02;
     }
@@ -71,7 +73,7 @@ float3 GetWaveHeight(const in float3 position, const in float skyLight, const in
 float3 getWaterNormal(const in float3 localPos, const in float3 geo_normal) {
     float3 worldPos = localPos + ap.camera.position;
 
-    float strength = texWaterNoiseB.Sample(samplerWater, worldPos.xz * 0.014).r;
+    float strength = 1.0;//texWaterNoiseB.Sample(samplerWater, worldPos.xz * 0.014).r;
     strength = strength * 0.25;
 
     // 1. Calculate the procedural height at the exact current pixel position

@@ -49,6 +49,12 @@ public class Resources {
             .magFilter(FilterMode.NEAREST)
             .create();
 
+        pipeline.sampler("sampler_linearRepeat")
+            .addressMode(AddressMode.REPEAT)
+            .minFilter(FilterMode.LINEAR)
+            .magFilter(FilterMode.LINEAR)
+            .create();
+
         texDeferColor = pipeline.texture2D("texDeferColor", TextureFormat.RGBA8_UNORM)
             .renderSize()
             .create();

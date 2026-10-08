@@ -5,10 +5,13 @@ import settings;
 import rt_pipeline;
 import lib.common;
 import lib.noise.blue;
+import lib.sky.shared;
 import lib.sky.sun;
+import lib.sky.clouds;
+import lib.sky.trace;
 
 
-float3 _SampleShadow(const in float3 localPos, const in float3 geo_normal, const in float3 skyLightDir) {
+float3 _SampleShadow(const in float3 localPos, const in float3 geo_normal, const in float3 skyLightDir, float dither) {
     float3 color = 1.0;
 
     var query = HWRT.startQuery(
@@ -41,12 +44,20 @@ float3 _SampleShadow(const in float3 localPos, const in float3 geo_normal, const
     }
 
     if (query.hasHit()) return 0.0;
+
+    if (CloudShadowsEnabled) {
+        float3 skyPos = planet.getSkyPosition(localPos);
+        color *= planet.traceCloudShadow(skyPos, skyLightDir, dither);
+    }
+
     return color;
 }
 
-float3 SampleShadow(const in float3 localPos, const in float3 geo_normal) {
+float3 SampleShadow(const in int2 globalPos, const in float3 localPos, const in float3 geo_normal) {
     float3 skyLightDir = normalize(ap.celestial.position);
-    return _SampleShadow(localPos, geo_normal, skyLightDir);
+
+    float dither = BlueNoise::sampleAnimated1D(globalPos, 0, ap.timing.frameCounter);
+    return _SampleShadow(localPos, geo_normal, skyLightDir, dither);
 }
 
 float3 SampleShadowDisc(const in int2 globalPos, const in float3 localPos, const in float3 geo_normal) {
@@ -55,7 +66,8 @@ float3 SampleShadowDisc(const in int2 globalPos, const in float3 localPos, const
     float2 rayNoise = BlueNoise::sampleAnimated2D(globalPos, 0, ap.timing.frameCounter);
     float3 randomSunVec = getSampledSunDirection(skyLightDir, planet.SunAngularRadius, rayNoise);
 
-    return _SampleShadow(localPos, geo_normal, randomSunVec);
+    float dither = BlueNoise::sampleAnimated1D(globalPos, 0, ap.timing.frameCounter);
+    return _SampleShadow(localPos, geo_normal, randomSunVec, dither);
 }
 
 void buildOrthonormalBasis(float3 v, out float3 b1, out float3 b2) {

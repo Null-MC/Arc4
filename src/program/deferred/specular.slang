@@ -264,7 +264,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         if (!query.hasHit()) {
             // sky
             float3 skyPos = planet.getSkyPosition(localPos);
-            float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+            float3 skyColor = planet.sampleViewClouds(skyPos, rayDir, sunDir);
             specular.rgb = getColorSpace().fromLinear(skyColor);
 
             // specular.rgb += renderSun(rayDir, sunDir) * SunColor;
@@ -480,7 +480,7 @@ float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const i
         // sky
         float3 skyPos = planet.getSkyPosition(localPos);
         float3 sunDir = normalize(ap.celestial.sunPosition);
-        float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+        float3 skyColor = planet.sampleViewClouds(skyPos, rayDir, sunDir);
         diffuse = getColorSpace().fromLinear(skyColor);
     }
     else {

@@ -85,6 +85,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float alpha = max(roughness * roughness, 0.002);
         float3 rayViewDir;
 
+        // Sample a visible GGX microfacet normal and reflect the incoming ray around it.
+        float3 microfacetNormal = sampleGGXVNDF(
+            -viewDir,
+            viewNormal,
+            alpha,
+            BlueNoise::sampleAnimated2D(globalPos, 37, ap.timing.frameCounter)
+        );
+
         // refract
 
         if (color.a > 0.99) {
@@ -101,7 +109,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             eta = 1.333;
         }
 
-        rayViewDir = refract(viewDir, viewNormal, eta);
+        rayViewDir = refract(viewDir, microfacetNormal, eta);
 
         if (all(rayViewDir == 0.0)) {
             // is_reflect = true;
@@ -248,8 +256,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float traceDist;
         if (!query.hasHit()) {
             // sky
-            float3 skyPos = planet.getSkyPosition(localPos);
-            float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+            // float3 skyPos = planet.getSkyPosition(localPos);
+            // float3 skyColor = planet.sampleViewClouds(skyPos, rayDir, sunDir);
+            float3 skyColor = planet.sampleViewClouds(rayDir);
             specular.rgb = getColorSpace().fromLinear(skyColor);
 
             // specular.rgb += renderSun(rayDir, sunDir) * SunColor;
@@ -274,7 +283,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             moonLight = getColorSpace().fromLinear(moonLight) * max(dot(hit_localNormal, moonDir), 0.0);
 
             float3 hit_diffuse = (sunLight + moonLight) / PI;
-            hit_diffuse *= SampleShadow(hit_localPos, hit_localNormal);
+            hit_diffuse *= SampleShadow(globalPos, hit_localPos, hit_localNormal);
 
             // sample random light from local list
             hit_diffuse += sampleRandomVoxelLight(globalPos, hit_localPos, hit_localNormal, hit_localNormal);
@@ -395,9 +404,10 @@ float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const i
     float3 diffuse;
     if (!query.hasHit()) {
         // sky
-        float3 skyPos = planet.getSkyPosition(localPos);
-        float3 sunDir = normalize(ap.celestial.sunPosition);
-        float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+        // float3 skyPos = planet.getSkyPosition(localPos);
+        // float3 sunDir = normalize(ap.celestial.sunPosition);
+        // float3 skyColor = planet.sampleViewClouds(skyPos, rayDir, sunDir);
+        float3 skyColor = planet.sampleViewClouds(rayDir);
         diffuse = getColorSpace().fromLinear(skyColor);
     }
     else {

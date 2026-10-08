@@ -132,7 +132,7 @@ void main(ComputeInput input) {
 
     inScatterFinal = inScatterFinal * transmittance + scattering;
 
-    inScatterFinal *= SampleShadow(localPos, 0.0);
+    inScatterFinal *= SampleShadow(input.globalPos.xy, localPos, 0.0);
 
     inScatterFinal += Sky_MinLight;
 
@@ -160,7 +160,8 @@ void main(ComputeInput input) {
         indirect = 0.0;
         if (!query.hasHit()) {
             // sky
-            float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+            // float3 skyColor = planet.sampleViewClouds(skyPos, rayDir, sunDir);
+            float3 skyColor = planet.sampleViewClouds(rayDir);
             indirect = PI * getColorSpace().fromLinear(skyColor);
         }
     }

@@ -117,9 +117,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         }
 
         if (!query.hasHit()) {
-            float3 skyPos = planet.getSkyPosition(pathPositions[bounce]);
+            // float3 skyPos = planet.getSkyPosition(pathPositions[bounce]);
             
-            skyRadiance = planet.sampleView(skyPos, rayDir, sunDir);
+            // skyRadiance = planet.sampleViewClouds(skyPos, rayDir, sunDir);
+            skyRadiance = planet.sampleViewClouds(rayDir);
             skyRadiance = transmitColor * getColorSpace().fromLinear(skyRadiance);
             terminatedInSky = true;
             break;
@@ -139,6 +140,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         let hit_sss = getSpecularReader().sss(hit_specular);
         bool hit_is_sss = hit_sss > sssDither;
         
+        // float hit_emission = 0.0;
         float hit_emission = mat_emission(hit_specular);
         hit_emission *= Attenuation::getExponential(hitDistance);
 

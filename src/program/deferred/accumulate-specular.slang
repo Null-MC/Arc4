@@ -96,7 +96,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         // if (!all(ap.camera.viewInv[2].xyz == ap.temporal.viewInv[2].xyz)) historyCounter = min(historyCounter, 8);
 
         // temporal blending
-        historyCounter = clamp(historyCounter, 0, int(MaxFrameCount * sqrt(roughness)) + 1);
+        historyCounter = clamp(historyCounter, 0, int(MaxFrameCount * sqrt(roughness)));
         
         // historyCounter *= max(sqrt(roughness), 0.016);
         // float3 specular_last = texSpecularHistory_read.Sample(apt_linearSampler, texcoordLast).rgb;

@@ -119,8 +119,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
             float3 sampleDiffuse;
             if (!query.hasHit()) {
-                float3 skyPos = planet.getSkyPosition(localPos);
-                float3 skyColor = planet.sampleView(skyPos, rayDir, normalize(ap.celestial.sunPosition));
+                // float3 skyPos = planet.getSkyPosition(localPos);
+                // float3 skyColor = planet.sampleViewClouds(skyPos, rayDir, normalize(ap.celestial.sunPosition));
+                float3 skyColor = planet.sampleViewClouds(rayDir);
                 sampleDiffuse = getColorSpace().fromLinear(skyColor);
             }
             else {
@@ -142,7 +143,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
                 
                 float3 hitDiffuse = (sunLight + moonLight) / PI;
 
-                hitDiffuse *= SampleShadow(hit_localPos, hit_localNormal);
+                hitDiffuse *= SampleShadow(globalPos, hit_localPos, hit_localNormal);
 
                 hitDiffuse += sampleRandomVoxelLight(globalPos, hit_localPos, hit_localNormal, hit_localNormal);
 

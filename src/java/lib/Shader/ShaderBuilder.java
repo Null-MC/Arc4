@@ -37,8 +37,9 @@ public class ShaderBuilder {
     public void mapBlock(String export, Consumer<BlockMapBuilder> config) {
         var builder = new BlockMapBuilder();
         config.accept(builder);
+        var blockData = builder.build(export);
 
-        var blockId = blocks.map(builder.build(export));
+        var blockId = blocks.map(blockData);
         exportedInts.put(export, blockId);
     }
 
@@ -99,6 +100,7 @@ public class ShaderBuilder {
         lightData.update();
     }
     
+    // TODO: this pattern won't work without a shared shader interface
     // private void injectGlobals(ComputeCommand shader) {
     //     // export block IDs
     //     // for (int blockId : Blocks.keys()) {

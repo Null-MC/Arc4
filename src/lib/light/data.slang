@@ -16,7 +16,5 @@ half4 getLightColorRange(const in int blockId) {
 half4 getLightColorRange(const in BlockData block) {
     half4 data = getLightColorRange(block.customId);
     if (data.a < 1e-6h) data.a = half(block.emission);
-    // data.rgb = 1.0h;
-    // data.a = half(block.emission);
     return data;
 }

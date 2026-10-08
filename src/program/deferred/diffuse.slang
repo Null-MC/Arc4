@@ -42,7 +42,6 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
     float3 clipPos = float3(texcoord * 2.0 - 1.0, depth);
     float3 viewPos = mul_project(ap.camera.projectionInv, clipPos);
-    
     float3 localPos = mul3(ap.camera.viewInv, viewPos);
 
     float hitDistance = ap.world.renderDistance;
@@ -88,10 +87,10 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
 
         float3 rayBias = 0.002 * geo_normal;
 
-        // if (is_sss) {
-        //     rayDir = -rayDir;
-        //     rayBias = -rayBias;
-        // }
+        if (is_sss) {
+            rayDir = -rayDir;
+            rayBias = -rayBias;
+        }
 
         // float fWidth = asfloat(texDeferData[globalPos].g);
         // var cone = RayCone.CreateFromGBuffer(fWidth);
@@ -132,7 +131,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float3 indirect;
         if (!query.hasHit()) {
             // sky
-            float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+            float3 skyColor = planet.sampleViewClouds(rayDir);
             indirect = getColorSpace().fromLinear(skyColor);
         }
         else {
@@ -179,7 +178,7 @@ float3 sampleBounce(uint2 globalPos, float3 localPos, float3 localNormal, float3
     // }
 
     float3 hit_diffuse = (sunLight + moonLight) / PI;
-    hit_diffuse *= SampleShadow(localPos, localNormal);
+    hit_diffuse *= SampleShadow(globalPos, localPos, localNormal);
 
     // sample random light from local list
     hit_diffuse += sampleRandomVoxelLight(globalPos, localPos, localNormal, localNormal);

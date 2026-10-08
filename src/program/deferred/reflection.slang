@@ -78,7 +78,8 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         // bool is_reflect = true;//F_s >= dither;
 
         float roughness = getSpecularReader().roughness(specularMap);
-        float alpha = max(roughness * roughness, 0.002);
+        // float alpha = max(roughness * roughness, 0.002);
+        float alpha = pow2(roughness);
         float3 rayViewDir;
 
         // Sample a visible GGX microfacet normal and reflect the incoming ray around it.
@@ -240,8 +241,9 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         float traceDist;
         if (!query.hasHit()) {
             // sky
-            float3 skyPos = planet.getSkyPosition(localPos);
-            float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+            // float3 skyPos = planet.getSkyPosition(localPos);
+            // float3 skyColor = planet.sampleViewClouds(skyPos, rayDir, sunDir);
+            float3 skyColor = planet.sampleViewClouds(rayDir);
             reflectColor = getColorSpace().fromLinear(skyColor);
 
             // reflectColor += renderSun(rayDir, sunDir) * SunColor;
@@ -344,7 +346,7 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
         );
 
         float3 sunDisk = renderSun(rayDir, sunDir);
-        float3 sunShadow = SampleShadow(localPos, geo_normal);
+        float3 sunShadow = SampleShadow(globalPos, localPos, geo_normal);
         reflectColor += lerp(sunDisk, sunSpecular, saturate(roughness*10.0)) * SunColor * sunShadow;
 
         // albedo tinting
@@ -436,9 +438,10 @@ float3 sampleIndirect(const in int2 globalPos, const in float3 localPos, const i
     float3 diffuse;
     if (!query.hasHit()) {
         // sky
-        float3 skyPos = planet.getSkyPosition(localPos);
-        float3 sunDir = normalize(ap.celestial.sunPosition);
-        float3 skyColor = planet.sampleView(skyPos, rayDir, sunDir);
+        // float3 skyPos = planet.getSkyPosition(localPos);
+        // float3 sunDir = normalize(ap.celestial.sunPosition);
+        // float3 skyColor = planet.sampleViewClouds(skyPos, rayDir, sunDir);
+        float3 skyColor = planet.sampleViewClouds(rayDir);
         diffuse = getColorSpace().fromLinear(skyColor);
     }
     else {

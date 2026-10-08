@@ -51,7 +51,7 @@ public class main implements ShaderPack {
         diffuseFlipper = new Flipper<Texture2D>(resources.texDiffuse_A, resources.texDiffuse_B);
         diffuseFastFlipper = new Flipper<Texture2D>(resources.texDiffuseFast_A, resources.texDiffuseFast_B);
 
-        sky = new HillaireSky(pipeline);
+        sky = new HillaireSky(screen, pipeline);
         exposure = new Exposure(screen, pipeline);
         new Water(pipeline);
 
@@ -81,9 +81,9 @@ public class main implements ShaderPack {
         var lightList = new LightList(pipeline, builder);
 
         withStage(pipeline, ProgramStage.PRE_RENDER, stage -> {
-            sky.renderTransmit(stage);
-            sky.renderMultiScatter(stage);
-            sky.renderView(stage);
+            sky.renderTransmit(stage, builder);
+            sky.renderMultiScatter(stage, builder);
+            sky.renderView(stage, builder);
 
             stage.clearTo(new Vector4f(0f), resources.weatherTexture);
 
@@ -223,6 +223,8 @@ public class main implements ShaderPack {
 
             diffuseFlipper.flip();
 
+            sky.renderClouds(stage, builder);
+
             builder.compute(stage, "Deferred-Composite", "program/deferred/composite", shader -> {
                 shader.override("texDiffuse_read", diffuseFlipper.getReader());
                 shader.override("texSpecular_read", specularFlipper.getReader());
@@ -312,7 +314,11 @@ public class main implements ShaderPack {
         var rendererConfig = state.getRendererConfig();
         var settings = rendererConfig.getSettings();
 
+        sky.Planet.RadiusGround_KM = settings.getFloatValue("Planet_GroundRadius");
+        sky.Planet.RadiusAtmosphere_KM = settings.getFloatValue("Planet_AtmosphereRadius");
+
         sky.Planet.SunAngularRadius = settings.getFloatValue("Sky_SunRadius");
+        sky.Planet.MoonAngularRadius = settings.getFloatValue("Sky_MoonRadius");
 
         rendererConfig.setSunPathRotation(settings.getFloatValue("SunAngle"));
 

@@ -15,9 +15,17 @@ public class blocks {
             .setLightRange(15));
 
         builder.mapBlock("BLOCK_CAMPFIRE_LIT", b -> b
-            .matches("campfire")
+            .matches("campfire[lit=true]")
             .setLightColor(color_Fire)
             .setLightRange(15));
+
+        builder.mapBlock("BLOCK_CAVE_VINE_BERRIES", b -> b
+            .matches(new String[]{
+                "cave_vines[berries=true]",
+                "cave_vines_plant[berries=true]",
+            })
+            .setLightColor("#99580e")
+            .setLightRange(14));
 
         builder.mapBlock("BLOCK_COPPER_TORCH", b -> b
             .matches(new String[]{"copper_torch", "copper_wall_torch"})
@@ -65,12 +73,15 @@ public class blocks {
             .setLightRange(3));
 
         builder.mapBlock("BLOCK_REDSTONE_LAMP", b -> b
-            .matches("redstone_lamp")
+            .matches("redstone_lamp[lit=true]")
             .setLightColor("#eb9a64")
             .setLightRange(14));
 
         builder.mapBlock("BLOCK_REDSTONE_TORCH", b -> b
-            .matches(new String[]{"redstone_torch", "redstone_wall_torch"})
+            .matches(new String[]{
+                "redstone_torch[lit=true]",
+                "redstone_wall_torch[lit=true]",
+            })
             .setLightColor("#ee390c")
             .setLightRange(7));
 

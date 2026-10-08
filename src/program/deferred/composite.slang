@@ -1,14 +1,17 @@
 import aperture;
 import settings;
 import lib.common;
+import lib.noise.blue;
 import lib.pbr.material;
 import lib.sky.shared;
 import lib.sky.transmit;
 import lib.sky.view;
 import lib.sky.sun;
 import lib.sky.moon;
+import lib.sky.clouds;
 import lib.octohedral;
 import lib.sharc;
+import lib.bicubic;
 
 
 static const bool Debug_Occupancy = false;
@@ -21,6 +24,9 @@ Texture2D<half4> texDeferNormal;
 Texture2D<half4> texDeferSpecular;
 Texture2D<half3> texDiffuse_read;
 Texture2D<half4> texSpecular_read;
+
+Texture2D<float4> texDeferClouds;
+
 
 [[shader("compute")]]
 [numthreads(16,16)]
@@ -127,10 +133,14 @@ void main(uint2 globalPos : SV_DispatchThreadID) {
             color.rgb *= getColorSpace().fromLinear(transmit);
         }
 
-        if (!userSettings.Volumetric_Enabled) {
-            float3 skyColor = planet.sampleView(skyPos, localViewDir, sunDir);
+        // if (!userSettings.Volumetric_Enabled) {
+            // float3 skyColor = planet.sampleView(skyPos, localViewDir, sunDir);
+            float3 skyColor = planet.sampleView(localViewDir);
             color.rgb += getColorSpace().fromLinear(skyColor);
-        }
+
+            float4 clouds = texDeferClouds.SampleBicubic(apt_linearSampler, texcoord);
+            color.rgb = color.rgb * clouds.a + getColorSpace().fromLinear(clouds.rgb);
+        // }
     }
 
     color.rgb = clamp(color.rgb, 0.0, half.maxValue);

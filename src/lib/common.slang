@@ -23,6 +23,8 @@ ColorTransformer getColorSpace() {
     }
 }
 
+SamplerState sampler_linearRepeat;
+
 
 float luminance(const in float3 color) {
     static const float3 L = float3(0.2126, 0.7152, 0.0722);
@@ -84,6 +86,10 @@ float3 mul3(const in float4x4 matrix, const in float3 vector) {
     return mul(matrix, float4(vector, 1.0)).xyz;
 }
 
+float3 mul_rotate(const in float4x4 matrix, const in float3 vector) {
+    return mul(float3x3(matrix), vector);
+}
+
 float3 mul_project(const in float4x4 matrix, const in float3 vector) {
     float4 result = mul(matrix, float4(vector, 1.0));
     return result.xyz / result.w;
@@ -94,6 +100,9 @@ float lengthSq(float3 vec) {
 }
 
 float3 getGlassTint(const in float3 albedo, const in float alpha) {
+    // TODO: Disable glass tint until HWRT can detect block ID's
+    return 1.0 - alpha;
+
     float3 tint = albedo.rgb;
     tint = lerp(1.0, normalize(tint), alpha);
     tint *= 1.0 - alpha;

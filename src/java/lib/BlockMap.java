@@ -5,6 +5,7 @@ import java.util.Set;
 
 import dev.irisshaders.aperture.api.objects.IBlockState;
 
+
 public class BlockMap {
     private final Map<Integer, BlockData> id_map = new java.util.HashMap<>();
     private final Map<String, Integer> name_map = new java.util.HashMap<>();
@@ -27,19 +28,21 @@ public class BlockMap {
     }
 
     public int getId(IBlockState block) {
-        // for (var block_id : _map.keySet()) {
-        //     var block_name = _map.get(block_id).name;
-        //     if (block.matches(block_name)) return block_id;
-        // }
+        for (var block_name : name_map.keySet()) {
+            var meta = BlockMeta.parse(block_name);
+            if (!meta.matches(block)) continue;
+            
+            return name_map.get(block_name);
+        }
 
-        var name = block.getBlockId().path();
-        return name_map.getOrDefault(name, 0);
+        return 0;
     }
 
     public Set<Integer> keys() {
         return id_map.keySet();
     }
 
+    // TODO: parse block mappings from toml
     // public void Parse(PipelineConfig pipeline) {
     //     pipeline.
     // }
